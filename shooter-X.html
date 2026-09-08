@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Survival Shooter - Waves, Bosses & Reload System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            background-color: #111; color: white; user-select: none;
+            font-family: 'Inter', sans-serif;
+            -webkit-touch-callout: none;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        ::-webkit-scrollbar { display: none; }
+        
+        .btn-hover { transition: all 0.2s ease; }
+        .btn-hover:hover { transform: scale(1.05); box-shadow: 0 0 15px currentColor; }
+        .card-hover { transition: transform 0.2s, border-color 0.2s; }
+        .card-hover:hover { transform: translateY(-5px) scale(1.02); border-color: #fff; }
+        
+        .text-shadow { text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+        .glass-panel { background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
+        <!-- Top Info: XP Bar & Wave Info -->
+        <div id="xp-container" class="hidden w-full max-w-3xl mx-auto mt-2">
+            <div class="flex justify-between items-center text-xs font-bold mb-1 px-1">
+                <span id="level-display" class="text-blue-400 text-shadow text-base">LV. 1</span>
+                <span id="wave-display" class="text-yellow-400 text-shadow text-base">WAVE 1 (00:00)</span>
+                <span id="xp-text" class="text-gray-300 text-shadow">0 / 100</span>
+            </div>
+            <div class="h-4 bg-gray-800 rounded-full border border-gray-600 overflow-hidden relative shadow-lg">
+                <div id="xp-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 w-0 transition-all duration-300"></div>
+            </div>
+        </div>
+
+        <!-- HUD: Ammo, Stats & HP -->
+        <div id="hud" class="hidden w-full flex justify-between items-end pb-4">
+            <div class="glass-panel p-3 rounded-xl flex gap-4 items-center">
+                <div>
+                    <div class="text-lg font-bold text-gray-200">KILLS: <span id="kill-display" class="text-red-400 font-bold">0</span></div>
+                    <div class="text-sm text-gray-400">GOLD: <span id="ingame-gold-display" class="text-yellow-400 font-bold">0</span></div>
+                </div>
+                <!-- Reload / Ammo Box -->
+                <div id="ammo-box" class="border-l border-gray-700 pl-4">
+                    <div class="text-xs text-gray-400">AMMO</div>
+                    <div class="text-xl font-black text-cyan-300" id="ammo-display">10 / 10</div>
+                </div>
+            </div>
+            <div class="w-1/3 max-w-xs">
+                <div class="text-xs text-center font-bold mb-1 text-red-300 text-shadow" id="hp-text">100 / 100</div>
+                <div class="h-6 bg-red-900/50 rounded-full border border-red-500 overflow-hidden relative">
+                    <div id="hp-bar" class="h-full bg-gradient-to-r from-red-600 to-red-400 w-full transition-all duration-200"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-30 overflow-y-auto py-8">
+        <div class="text-center w-full max-w-3xl px-4 pointer-events-auto flex flex-col items-center">
+            <h1 class="text-5xl md:text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">SURVIVOR X</h1>
+            
+            <div class="flex items-center gap-4 mb-6">
+                <div class="glass-panel px-6 py-2 rounded-full flex items-center gap-2">
+                    <span class="text-yellow-400 font-bold text-xl">💰</span>
+                    <span id="lobby-gold" class="text-white font-bold text-xl">0</span>
+                </div>
+                <button onclick="openShop()" class="btn-hover bg-zinc-800 border border-gray-500 text-white px-6 py-2 rounded-full font-bold">영구 상점</button>
+            </div>
+
+            <p class="text-sm text-gray-400 mb-4 border-t border-gray-700 pt-4 w-full">시작 무기를 선택하면 웨이브가 시작됩니다</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                <button onclick="startGame('pistol')" class="btn-hover bg-zinc-800/80 border-2 border-yellow-500 text-yellow-500 p-4 rounded-xl flex flex-col items-center">
+                    <span class="text-2xl font-bold mb-1">권총 (Pistol)</span>
+                    <span class="text-sm opacity-80 text-gray-300">기본 무기. 밸런스형, 장전 속도 빠름.</span>
+                </button>
+                <button id="btn-sel-machinegun" onclick="startGame('machinegun')" class="btn-hover bg-zinc-800/80 border-2 border-orange-500 text-orange-500 p-4 rounded-xl flex flex-col items-center relative">
+                    <span class="text-2xl font-bold mb-1">기관총 (Machine Gun)</span>
+                    <span id="desc-machinegun" class="text-sm opacity-80 text-gray-300">대용량 탄창과 빠른 연사력.</span>
+                </button>
+                <button id="btn-sel-shotgun" onclick="startGame('shotgun')" class="btn-hover bg-zinc-800/80 border-2 border-red-500 text-red-500 p-4 rounded-xl flex flex-col items-center relative">
+                    <span class="text-2xl font-bold mb-1">샷건 (Shotgun)</span>
+                    <span id="desc-shotgun" class="text-sm opacity-80 text-gray-300">근접 산탄 사격 및 묵직한 한 방.</span>
+                </button>
+                <button id="btn-sel-sniper" onclick="startGame('sniper')" class="btn-hover bg-zinc-800/80 border-2 border-cyan-500 text-cyan-500 p-4 rounded-xl flex flex-col items-center relative">
+                    <span class="text-2xl font-bold mb-1">저격총 (Sniper)</span>
+                    <span id="desc-sniper" class="text-sm opacity-80 text-gray-300">광활한 시야와 관통형 고위력 탄환.</span>
+                </button>
+            </div>
+            
+            <p class="text-gray-500 mt-6 text-sm">조작: WASD / 방향키 / 마우스 or 터치 드래그 (자동 사격 & 자동 장전)</p>
+        </div>
+    </div>
+
+    <div id="shop-screen" class="absolute inset-0 flex items-center justify-center bg-black/95 z-40 hidden overflow-y-auto">
+        <div class="w-full max-w-2xl p-6 pointer-events-auto">
+            <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
+                <h2 class="text-3xl font-black text-white">영구 업그레이드 상점</h2>
+                <div class="text-xl font-bold text-yellow-400">보유 골드: <span id="shop-gold">0</span></div>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xl font-bold text-red-400">기본 공격력 강화</h3>
+                        <p class="text-sm text-gray-400">모든 무기 피해량 10% 증가 (현재 LV.<span id="upg-dmg-lvl">0</span>)</p>
+                    </div>
+                    <button onclick="buyUpgrade('dmg')" id="btn-upg-dmg" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg font-bold">
+                        <span id="cost-dmg">100</span> G
+                    </button>
+                </div>
+                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xl font-bold text-green-400">최대 체력 강화</h3>
+                        <p class="text-sm text-gray-400">최대 체력 +20 증가 (현재 LV.<span id="upg-hp-lvl">0</span>)</p>
+                    </div>
+                    <button onclick="buyUpgrade('hp')" id="btn-upg-hp" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold">
+                        <span id="cost-hp">100</span> G
+                    </button>
+                </div>
+                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xl font-bold text-blue-400">이동 속도 강화</h3>
+                        <p class="text-sm text-gray-400">이동 속도 5% 증가 (현재 LV.<span id="upg-spd-lvl">0</span>)</p>
+                    </div>
+                    <button onclick="buyUpgrade('spd')" id="btn-upg-spd" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold">
+                        <span id="cost-spd">100</span> G
+                    </button>
+                </div>
+
+                <div class="border-t border-gray-700 pt-4 mt-4">
+                    <h3 class="text-lg font-bold text-yellow-400 mb-3">무기 해제 (Unlock Weapons)</h3>
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                            <div>
+                                <h4 class="text-lg font-bold text-red-400">샷건 잠금 해제</h4>
+                                <p class="text-xs text-gray-400">근접 산탄 사격 및 묵직한 한 방</p>
+                            </div>
+                            <button onclick="buyWeaponUnlock('shotgun')" id="btn-lock-shotgun" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">500 G</button>
+                        </div>
+                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                            <div>
+                                <h4 class="text-lg font-bold text-cyan-400">저격총 잠금 해제</h4>
+                                <p class="text-xs text-gray-400">광활한 시야와 관통형 고위력 탄환</p>
+                            </div>
+                            <button onclick="buyWeaponUnlock('sniper')" id="btn-lock-sniper" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">3,200 G</button>
+                        </div>
+                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
+                            <div>
+                                <h4 class="text-lg font-bold text-orange-400">기관총 잠금 해제</h4>
+                                <p class="text-xs text-gray-400">대용량 탄창과 빠른 연사력</p>
+                            </div>
+                            <button onclick="buyWeaponUnlock('machinegun')" id="btn-lock-machinegun" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">5,000 G</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <button onclick="closeShop()" class="bg-gray-600 hover:bg-gray-500 text-white px-8 py-3 rounded-full font-bold text-lg">돌아가기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Up Modal -->
+    <div id="levelup-screen" class="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-40 hidden">
+        <div class="text-center w-full max-w-4xl px-4 pointer-events-auto">
+            <h1 class="text-5xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 animate-pulse">LEVEL UP!</h1>
+            <p class="text-gray-200 mb-6 text-lg">무기 강화, 스탯 증가, 패시브 능력을 선택하세요</p>
+            
+            <div id="levelup-choices" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="absolute inset-0 flex items-center justify-center bg-red-950/90 backdrop-blur-md z-50 hidden pointer-events-auto">
+        <div class="text-center p-8 bg-black/60 rounded-3xl border border-red-500 max-w-md w-full">
+            <h1 class="text-5xl font-black text-red-500 mb-2 text-shadow">GAME OVER</h1>
+            <h2 id="gameover-reason" class="text-xl font-bold text-yellow-300 mb-4">전투에서 패배했습니다</h2>
+            
+            <div class="space-y-3 mb-8 text-left px-4">
+                <p class="text-lg text-gray-300 flex justify-between"><span>도달 웨이브:</span> <span id="final-wave" class="font-bold text-yellow-400">WAVE 1</span></p>
+                <p class="text-lg text-gray-300 flex justify-between"><span>최종 레벨:</span> <span id="final-level" class="font-bold text-blue-400">1</span></p>
+                <p class="text-lg text-gray-300 flex justify-between"><span>처치한 적:</span> <span id="final-kills" class="font-bold text-red-400">0</span></p>
+                <p class="text-lg text-gray-300 flex justify-between border-t border-gray-700 pt-3 mt-3"><span>획득 골드:</span> <span class="font-bold text-yellow-400">+<span id="final-gold">0</span> G</span></p>
+            </div>
+            
+            <button onclick="resetGame()" class="w-full bg-white text-black py-4 rounded-xl font-bold text-xl hover:bg-gray-200 transition shadow-lg">메인 메뉴로</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let saveData = { gold: 0, upgrades: { dmg: 0, hp: 0, spd: 0 }, unlockedWeapons: { pistol: true, shotgun: false, sniper: false, machinegun: false } };
+        
+        function loadSave() {
+            try {
+                const saved = localStorage.getItem('survivorXSave');
+                if (saved) {
+                    let parsed = JSON.parse(saved);
+                    saveData = { ...saveData, ...parsed };
+                    if (!saveData.unlockedWeapons) saveData.unlockedWeapons = { pistol: true, shotgun: false, sniper: false, machinegun: false };
+                }
+                if (saveData.gold === undefined) saveData.gold = 0;
+                if (!saveData.upgrades) saveData.upgrades = { dmg: 0, hp: 0, spd: 0 };
+            } catch (e) {}
+            updateShopUI();
+        }
+
+        function saveGameData() {
+            try { localStorage.setItem('survivorXSave', JSON.stringify(saveData)); } catch (e) {}
+            updateShopUI();
+        }
+
+        function getUpgradeCost(type) { return 100 + (saveData.upgrades[type] * 150); }
+
+        function updateShopUI() {
+            document.getElementById('lobby-gold').innerText = saveData.gold;
+            document.getElementById('shop-gold').innerText = saveData.gold;
+            ['dmg', 'hp', 'spd'].forEach(type => {
+                const lvl = saveData.upgrades[type];
+                const cost = getUpgradeCost(type);
+                document.getElementById(`upg-${type}-lvl`).innerText = lvl;
+                document.getElementById(`cost-${type}`).innerText = cost;
+                const btn = document.getElementById(`btn-upg-${type}`);
+                if (saveData.gold >= cost && lvl < 10) {
+                    btn.disabled = false; btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    if (lvl >= 10) btn.innerText = "MAX";
+                }
+            });
+
+            // 무기 해제 버튼 UI 갱신
+            const weaponUnlocks = [
+                { id: 'shotgun', cost: 500 },
+                { id: 'sniper', cost: 3200 },
+                { id: 'machinegun', cost: 5000 }
+            ];
+
+            weaponUnlocks.forEach(w => {
+                const btn = document.getElementById(`btn-lock-${w.id}`);
+                const selBtn = document.getElementById(`btn-sel-${w.id}`);
+                const isUnlocked = saveData.unlockedWeapons[w.id];
+
+                if (isUnlocked) {
+                    btn.innerText = "해제됨";
+                    btn.disabled = true;
+                    btn.className = "bg-green-700 text-white px-6 py-2 rounded-lg font-bold opacity-70 cursor-not-allowed";
+                    
+                    selBtn.disabled = false;
+                    selBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+                } else {
+                    btn.innerText = `${w.cost.toLocaleString()} G`;
+                    if (saveData.gold >= w.cost) {
+                        btn.disabled = false;
+                        btn.className = "bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold";
+                    } else {
+                        btn.disabled = true;
+                        btn.className = "bg-yellow-600/50 text-white px-6 py-2 rounded-lg font-bold opacity-50 cursor-not-allowed";
+                    }
+
+                    selBtn.disabled = true;
+                    selBtn.classList.add('opacity-40', 'cursor-not-allowed');
+                }
+            });
+        }
+
+        function buyUpgrade(type) {
+            const cost = getUpgradeCost(type);
+            if (saveData.gold >= cost && saveData.upgrades[type] < 10) {
+                saveData.gold -= cost;
+                saveData.upgrades[type]++;
+                saveGameData();
+            }
+        }
+
+        function buyWeaponUnlock(weaponId) {
+            let costs = { shotgun: 500, sniper: 3200, machinegun: 5000 };
+            let cost = costs[weaponId];
+            if (!saveData.unlockedWeapons[weaponId] && saveData.gold >= cost) {
+                saveData.gold -= cost;
+                saveData.unlockedWeapons[weaponId] = true;
+                saveGameData();
+            }
+        }
+
+        function openShop() { document.getElementById('shop-screen').classList.remove('hidden'); }
+        function closeShop() { document.getElementById('shop-screen').classList.add('hidden'); }
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const distSq = (x1, y1, x2, y2) => (x2 - x1)**2 + (y2 - y1)**2;
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+        const pointer = { active: false, x: 0, y: 0 };
+
+        window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+        
+        canvas.addEventListener('mousedown', e => { pointer.active = true; updatePointer(e); });
+        canvas.addEventListener('mousemove', e => { if(pointer.active) updatePointer(e); });
+        window.addEventListener('mouseup', () => pointer.active = false);
+        canvas.addEventListener('touchstart', e => { pointer.active = true; updatePointer(e.touches[0]); });
+        canvas.addEventListener('touchmove', e => { if(pointer.active) updatePointer(e.touches[0]); e.preventDefault(); }, {passive: false});
+        window.addEventListener('touchend', () => pointer.active = false);
+
+        function updatePointer(e) { pointer.x = e.clientX; pointer.y = e.clientY; }
+
+        const WEAPONS_DATA = {
+            pistol: {
+                id: 'pistol', name: "권총", color: "#eab308", baseCooldown: 400,
+                baseDamage: 30, speed: 16, range: 450, pierce: 1, count: 1, spread: 0, 
+                cameraScale: 1.0, projectileRadius: 4, maxAmmo: 12, reloadTime: 1200,
+                fire: function(p, targetAngle, enemiesList) {
+                    spawnProjectile(p, targetAngle, this);
+                },
+                getDescription: function(lv) {
+                    if (lv === 4) return "[진화] 쌍권총: 탄창 12발, 2개의 적을 동시에 타겟팅하여 양손 사격";
+                    if (lv === 9) return "[최종 진화] 아킴보: 탄창 16발, 여러 적을 향해 탄수 적지만 폭풍 연사";
+                    return `피해량 +20%, 탄창 및 장전속도 개선`;
+                }
+            },
+            machinegun: {
+                id: 'machinegun', name: "기관총", color: "#f97316", baseCooldown: 100,
+                baseDamage: 12, speed: 18, range: 350, pierce: 1, count: 1, spread: 0.3, 
+                cameraScale: 1.0, projectileRadius: 3, maxAmmo: 40, reloadTime: 1800,
+                fire: function(p, targetAngle) {
+                    const finalAngle = targetAngle + (Math.random() * this.spread - this.spread/2);
+                    spawnProjectile(p, finalAngle, this);
+                },
+                getDescription: function(lv) {
+                    if (lv === 4) return "[진화] 미니건: 탄창 80발, 극한의 연사력";
+                    if (lv === 9) return "[최종 진화] 플라즈마 머신건: 탄창 150발, 플라즈마 탄환 관통";
+                    return `피해량 +15%, 탄창 용량 대폭 증가`;
+                }
+            },
+            shotgun: {
+                id: 'shotgun', name: "샷건", color: "#ef4444", baseCooldown: 900,
+                baseDamage: 25, speed: 14, range: 300, pierce: 1, count: 5, spread: 0.6, 
+                cameraScale: 1.0, projectileRadius: 4, maxAmmo: 6, reloadTime: 2000,
+                fire: function(p, targetAngle, enemiesList) {
+                    for (let i = 0; i < this.count; i++) {
+                        const angleOffset = (i - (this.count - 1) / 2) * (this.spread / Math.max(1, this.count - 1));
+                        spawnProjectile(p, targetAngle + angleOffset, this);
+                    }
+                },
+                getDescription: function(lv) {
+                    if (lv === 4) return "[진화] 전투 샷건: 탄창 10발, 산탄 수 8발로 증가";
+                    if (lv === 9) return "[최종 진화] 지옥불 산탄포: 탄창 16발, 광범위 화염 폭풍";
+                    return `산탄 수 증가 또는 피해량 +25%`;
+                }
+            },
+            sniper: {
+                id: 'sniper', name: "저격총", color: "#06b6d4", baseCooldown: 1500,
+                baseDamage: 160, speed: 26, range: 1000, pierce: 4, count: 1, spread: 0, 
+                cameraScale: 0.6, projectileRadius: 6, maxAmmo: 4, reloadTime: 2200,
+                fire: function(p, targetAngle, enemiesList) { spawnProjectile(p, targetAngle, this); },
+                getDescription: function(lv) {
+                    if (lv === 4) return "[진화] 레일건: 탄창 8발, 초고속 관통 탄환";
+                    if (lv === 9) return "[최종 진화] 펄스 레일 블라스터: 탄창 12발, 파괴적 거대 빔";
+                    return `피해량 +30%, 관통력 및 탄창 증가`;
+                }
+            }
+        };
+
+        function createWeaponInstance(weaponId) {
+            const template = WEAPONS_DATA[weaponId];
+            return {
+                ...template,
+                level: 1,
+                cooldownTimer: 0,
+                damage: template.baseDamage,
+                cooldown: template.baseCooldown,
+                maxAmmo: template.maxAmmo,
+                currentAmmo: template.maxAmmo,
+                reloadTimer: 0,
+                isReloading: false
+            };
+        }
+
+        function upgradeWeapon(w) {
+            w.level++;
+            const lv = w.level;
+            switch(w.id) {
+                case 'pistol':
+                    if (lv === 5) { w.name = "쌍권총"; w.color = "#fbbf24"; w.count = 2; w.maxAmmo = 12; w.cooldown = 320; }
+                    else if (lv === 10) { w.name = "아킴보"; w.color = "#f59e0b"; w.count = 2; w.maxAmmo = 10; w.cooldown = 140; w.pierce += 1; }
+                    else { w.damage *= 1.2; w.maxAmmo += 2; }
+                    break;
+                case 'machinegun':
+                    if (lv === 5) { w.name = "미니건"; w.color = "#ea580c"; w.cooldown = 45; w.maxAmmo = 80; w.spread = 0.4; }
+                    else if (lv === 10) { w.name = "플라즈마 머신건"; w.color = "#3b82f6"; w.damage *= 2.0; w.pierce += 1; w.maxAmmo = 150; w.projectileRadius = 5; }
+                    else { w.damage *= 1.15; w.maxAmmo += 20; }
+                    break;
+                case 'shotgun':
+                    if (lv === 5) { w.name = "전투 샷건"; w.color = "#dc2626"; w.count = 8; w.maxAmmo = 10; }
+                    else if (lv === 10) { w.name = "지옥불 산탄포"; w.color = "#ff0000"; w.count = 14; w.maxAmmo = 16; w.pierce += 2; w.damage *= 1.5; }
+                    else { if(lv % 2 === 0) w.count += 1; else w.damage *= 1.25; w.maxAmmo += 2; }
+                    break;
+                case 'sniper':
+                    if (lv === 5) { w.name = "레일건"; w.color = "#2dd4bf"; w.pierce += 5; w.damage *= 1.5; w.maxAmmo = 8; w.projectileRadius = 8; }
+                    else if (lv === 10) { w.name = "펄스 레일 블라스터"; w.color = "#8b5cf6"; w.pierce += 10; w.damage *= 2.5; w.maxAmmo = 12; w.cameraScale = 0.5; w.projectileRadius = 14; }
+                    else { w.damage *= 1.3; w.maxAmmo += 2; w.pierce += 1; }
+                    break;
+            }
+            w.currentAmmo = w.maxAmmo; // 업그레이드시 탄창 즉시 충전
+        }
+
+        // PASSIVES & SUB-ABILITIES
+        const PASSIVES_DATA = {
+            attack: { name: "근력 강화", desc: "모든 무기 피해량 15% 증가", icon: "⚔️", level: 0 },
+            speed: { name: "신속의 부츠", desc: "이동 속도 10% 증가", icon: "👟", level: 0 },
+            haste: { name: "고속 장전", desc: "재장전 시간 15% 단축 및 공속 상승", icon: "⚡", level: 0 },
+            magnet: { name: "자석", desc: "아이템 획득 반경 25% 증가", icon: "🧲", level: 0 },
+            crit: { name: "치명타 증폭", desc: "20% 확률로 2배의 치명타 피해", icon: "🎯", level: 0 },
+            regen: { name: "나노 재생", desc: "초당 체력 1.5% 자동 회복", icon: "🧬", level: 0 },
+            shockwave: { name: "충격파", desc: "일정 주기마다 주변 적을 강력하게 밀어냄", icon: "💥", level: 0, cooldown: 3.0, timer: 0 }
+        };
+
+        let gameState = 'START';
+        let lastTime = 0, gameTimer = 0;
+        let waveNumber = 1, waveTimer = 0; // 웨이브당 2분 (120초) 무한 반복
+        const WAVE_DURATION = 120;
+        
+        let killCount = 0, sessionGold = 0;
+        let animationFrameId;
+        
+        let player = {
+            x: 0, y: 0, radius: 15,
+            baseSpeed: 210, speed: 210,
+            baseMaxHp: 100, maxHp: 100, hp: 100,
+            basePickupRange: 70, pickupRange: 70,
+            xp: 0, level: 1, maxXp: 100,
+            weapon: null,
+            passives: JSON.parse(JSON.stringify(PASSIVES_DATA)),
+            stats: { damageMult: 1.0, cooldownMult: 1.0, reloadMult: 1.0 }
+        };
+        
+        let camera = { x: 0, y: 0, scale: 1.0, targetScale: 1.0 };
+        let enemies = [], projectiles = [], particles = [], damageTexts = [], items = [];
+        let enemySpawnTimer = 0, enemySpawnRate = 900, enemyHpMultiplier = 1.0;
+
+        function calcPlayerStats() {
+            const shopDmg = saveData.upgrades.dmg * 0.1;
+            const shopHp = saveData.upgrades.hp * 20;
+            const shopSpd = saveData.upgrades.spd * 0.05;
+
+            player.stats.damageMult = 1.0 + shopDmg + (player.passives.attack.level * 0.15);
+            player.maxHp = player.baseMaxHp + shopHp;
+            player.speed = player.baseSpeed * (1.0 + shopSpd + (player.passives.speed.level * 0.1));
+            player.stats.reloadMult = Math.max(0.3, 1.0 - (player.passives.haste.level * 0.15));
+            player.stats.cooldownMult = player.stats.reloadMult;
+            player.pickupRange = player.basePickupRange * (1.0 + (player.passives.magnet.level * 0.25));
+            player.stats.critChance = player.passives.crit.level * 0.2; // 레벨당 20% 확률
+            player.stats.regenRate = player.passives.regen.level * 0.015; // 초당 체력 회복량
+            // 충격파 쿨타임은 레벨이 높을수록 쿨타임 감소 (레벨당 0.4초 감소, 최소 1.0초)
+            player.stats.shockwavePower = player.passives.shockwave.level > 0 ? 120 : 0;
+            player.passives.shockwave.cooldown = Math.max(1.0, 3.4 - (player.passives.shockwave.level * 0.4));
+        }
+
+        function spawnProjectile(p, angle, w) {
+            let finalDamage = w.damage * player.stats.damageMult;
+            let isCrit = false;
+            if (player.stats.critChance > 0 && Math.random() < player.stats.critChance) {
+                finalDamage *= 2.0;
+                isCrit = true;
+            }
+            projectiles.push({
+                x: p.x, y: p.y,
+                vx: Math.cos(angle) * w.speed * 60,
+                vy: Math.sin(angle) * w.speed * 60,
+                radius: w.projectileRadius || 4,
+                damage: finalDamage,
+                color: isCrit ? '#f43f5e' : w.color,
+                rangeSq: w.range ** 2,
+                startX: p.x, startY: p.y,
+                pierce: w.pierce,
+                isCrit: isCrit,
+                hitEnemies: new Set()
+            });
+        }
+
+        function spawnEnemy(isBoss = false, bossMultiplier = 1.0) {
+            const safeDist = Math.max(canvas.width, canvas.height) / camera.scale / 2 + 120;
+            const angle = Math.random() * Math.PI * 2;
+            const x = player.x + Math.cos(angle) * safeDist;
+            const y = player.y + Math.sin(angle) * safeDist;
+            
+            if (isBoss) {
+                const bossHp = 2500 * bossMultiplier * enemyHpMultiplier;
+                enemies.push({
+                    x: x, y: y,
+                    radius: 45,
+                    speed: 85,
+                    hp: bossHp, maxHp: bossHp,
+                    color: '#ef4444',
+                    damage: 35,
+                    isBoss: true,
+                    name: `웨이브 ${waveNumber} 보스`
+                });
+                return;
+            }
+
+            const eliteChance = Math.min(0.45, (waveNumber * 0.05) + (gameTimer / 400));
+            const isElite = Math.random() < eliteChance;
+            
+            enemies.push({
+                x: x, y: y,
+                radius: isElite ? 22 : 12,
+                speed: isElite ? 70 : 110 + (Math.random() * 25),
+                hp: (isElite ? 180 : 35) * enemyHpMultiplier,
+                maxHp: (isElite ? 180 : 35) * enemyHpMultiplier,
+                color: isElite ? '#8b5cf6' : '#22c55e',
+                damage: isElite ? 18 : 8,
+                isElite: isElite,
+                isBoss: false
+            });
+        }
+
+        function spawnItem(x, y, isElite, isBoss) {
+            let type = 'xp', value = 12, color = '#3b82f6', size = 4;
+            if (isBoss) {
+                type = 'gold'; value = 200; color = '#fbbf24'; size = 10;
+            } else if (Math.random() < 0.1) {
+                type = 'gold'; value = isElite ? 8 : 1; color = '#fbbf24'; size = 5;
+            } else if (isElite) {
+                value = 60; color = '#8b5cf6'; size = 6;
+            }
+            items.push({ x, y, type, value, color, size, collected: false });
+        }
+
+        function checkLevelUp() {
+            if (player.xp >= player.maxXp) {
+                player.xp -= player.maxXp;
+                player.level++;
+                player.maxXp = Math.floor(100 * Math.pow(player.level, 1.25));
+                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.25);
+                updateHUD();
+                triggerLevelUpScreen();
+            } else {
+                updateHUD();
+            }
+        }
+
+        function triggerLevelUpScreen() {
+            gameState = 'LEVELUP';
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('xp-container').classList.add('hidden');
+            document.getElementById('levelup-screen').classList.remove('hidden');
+            
+            let pool = [];
+            const w = player.weapon;
+            if (w && w.level < 10) pool.push({ type: 'upgrade_weapon', weapon: w });
+            
+            Object.keys(player.passives).forEach(pKey => {
+                if (player.passives[pKey].level < 5) {
+                    pool.push({ type: 'passive', id: pKey, data: player.passives[pKey] });
+                }
+            });
+
+            if (pool.length === 0) {
+                pool.push({ type: 'heal', data: { name: '긴급 수리', desc: '체력을 50% 회복합니다.', icon: '💖' } });
+                pool.push({ type: 'gold', data: { name: '보급품 금괴', desc: '150 골드를 획득합니다.', icon: '💰' } });
+            }
+
+            pool.sort(() => 0.5 - Math.random());
+            const choices = pool.slice(0, 3);
+            const container = document.getElementById('levelup-choices');
+            container.innerHTML = '';
+
+            choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = "card-hover bg-zinc-900 border-2 border-gray-700 text-left p-6 rounded-2xl flex flex-col h-full";
+                let title = "", desc = "", color = "#a78bfa", icon = "⚡";
+
+                if (choice.type === 'upgrade_weapon') {
+                    let nextLv = choice.weapon.level + 1;
+                    title = `${choice.weapon.name} LV.${nextLv}`;
+                    if (nextLv === 5 || nextLv === 10) title = `✨ 무기 진화 가능 ✨`;
+                    desc = choice.weapon.getDescription(choice.weapon.level);
+                    color = choice.weapon.color;
+                    icon = "🔫";
+                } else if (choice.type === 'passive') {
+                    title = `${choice.data.icon} ${choice.data.name} LV.${choice.data.level + 1}`;
+                    desc = choice.data.desc;
+                } else {
+                    title = choice.data.name; desc = choice.data.desc; icon = choice.data.icon; color = "#4ade80";
+                }
+
+                btn.style.borderColor = color;
+                btn.innerHTML = `
+                    <div class="text-3xl mb-2">${icon}</div>
+                    <div class="text-xl font-bold mb-2 text-white">${title}</div>
+                    <div class="text-gray-400 text-sm mt-auto">${desc}</div>
+                `;
+                btn.onclick = () => applyUpgradeAndResume(choice);
+                container.appendChild(btn);
+            });
+        }
+
+        function applyUpgradeAndResume(choice) {
+            if (choice.type === 'upgrade_weapon') {
+                upgradeWeapon(choice.weapon);
+            } else if (choice.type === 'passive') {
+                player.passives[choice.id].level++;
+                calcPlayerStats();
+            } else if (choice.type === 'heal') {
+                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5);
+            } else if (choice.type === 'gold') {
+                sessionGold += 150;
+            }
+
+            document.getElementById('levelup-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('xp-container').classList.remove('hidden');
+            gameState = 'PLAYING';
+            lastTime = performance.now();
+        }
+
+        function update(dt) {
+            if (gameState !== 'PLAYING') return;
+            gameTimer += dt;
+            waveTimer += dt;
+
+            // 나노 재생 패시브 적용
+            if (player.stats.regenRate > 0 && player.hp < player.maxHp) {
+                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * player.stats.regenRate * dt);
+            }
+
+            // 충격파 쿨타임 및 발동 관리
+            let triggerShockwave = false;
+            if (player.passives.shockwave.level > 0) {
+                player.passives.shockwave.timer -= dt;
+                if (player.passives.shockwave.timer <= 0) {
+                    player.passives.shockwave.timer = player.passives.shockwave.cooldown;
+                    triggerShockwave = true;
+                    // 충격파 시각 이펙트용 파티클 생성
+                    for (let k = 0; k < 16; k++) {
+                        const angle = (k / 16) * Math.PI * 2;
+                        particles.push({
+                            x: player.x, y: player.y,
+                            vx: Math.cos(angle) * 180, vy: Math.sin(angle) * 180,
+                            life: 0.5, color: '#38bdf8', size: 3
+                        });
+                    }
+                }
+            }
+
+            // 웨이브 2분(120초) 무한 루프 및 보스 소환 관리
+            if (waveTimer >= WAVE_DURATION) {
+                waveTimer = 0;
+                waveNumber++;
+                
+                // 50웨이브마다 보스 등장 (50, 100, 150...)
+                if (waveNumber % 50 === 0) {
+                    const bossMultiplier = waveNumber / 50;
+                    const actualMultiplier = waveNumber === 100 ? 3.0 : bossMultiplier;
+                    spawnEnemy(true, actualMultiplier);
+                    damageTexts.push({ x: player.x, y: player.y - 40, text: `⚠️ WAVE ${waveNumber} INFINITE BOSS APPEARED!`, life: 4.0, color: '#ef4444' });
+                } else {
+                    damageTexts.push({ x: player.x, y: player.y - 40, text: `🌊 WAVE ${waveNumber} BEGINS!`, life: 3.0, color: '#facc15' });
+                }
+                
+                // 웨이브가 올라갈수록 적 체력 배수 증가
+                enemyHpMultiplier = 1.0 + (waveNumber - 1) * 0.25;
+            }
+
+            // 플레이어 이동
+            let dx = 0, dy = 0;
+            if (keys.w || keys.ArrowUp) dy -= 1;
+            if (keys.s || keys.ArrowDown) dy += 1;
+            if (keys.a || keys.ArrowLeft) dx -= 1;
+            if (keys.d || keys.ArrowRight) dx += 1;
+
+            if (pointer.active) {
+                const worldX = (pointer.x - canvas.width/2) / camera.scale + camera.x;
+                const worldY = (pointer.y - canvas.height/2) / camera.scale + camera.y;
+                const angle = Math.atan2(worldY - player.y, worldX - player.x);
+                if (distSq(player.x, player.y, worldX, worldY) > 400) {
+                     dx = Math.cos(angle); dy = Math.sin(angle);
+                }
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                const len = Math.sqrt(dx*dx + dy*dy);
+                player.x += (dx / len) * player.speed * dt;
+                player.y += (dy / len) * player.speed * dt;
+            }
+
+            // 무기 사격 및 자동 장전 로직
+            const w = player.weapon;
+            if (w) {
+                if (w.isReloading) {
+                    w.reloadTimer -= dt * 1000;
+                    if (w.reloadTimer <= 0) {
+                        w.isReloading = false;
+                        w.currentAmmo = w.maxAmmo;
+                    }
+                } else {
+                    w.cooldownTimer -= dt * 1000;
+                    if (w.currentAmmo <= 0) {
+                        w.isReloading = true;
+                        w.reloadTimer = w.reloadTime * player.stats.reloadMult;
+                    } else if (w.cooldownTimer <= 0 && enemies.length > 0) {
+                        const rngSq = w.range ** 2;
+                        
+                        // 쌍권총 및 아킴보: 2중 타겟팅 양손 사격 (개별 타겟 또는 같은 적 허용)
+                        if (w.id === 'pistol' && w.level >= 5) {
+                            let sortedEnemies = enemies.filter(e => distSq(player.x, player.y, e.x, e.y) <= rngSq)
+                                .map(e => ({ enemy: e, dist: distSq(player.x, player.y, e.x, e.y) }))
+                                .sort((a, b) => a.dist - b.dist);
+
+                            if (sortedEnemies.length > 0) {
+                                for (let i = 0; i < w.count; i++) {
+                                    let target = sortedEnemies[i % sortedEnemies.length].enemy;
+                                    const angle = Math.atan2(target.y - player.y, target.x - player.x);
+                                    spawnProjectile(player, angle, w);
+                                }
+                                w.currentAmmo--;
+                                w.cooldownTimer = w.cooldown * player.stats.cooldownMult;
+                                if (w.currentAmmo <= 0) {
+                                    w.isReloading = true;
+                                    w.reloadTimer = w.reloadTime * player.stats.reloadMult;
+                                }
+                            }
+                        } else {
+                            let nearest = null, minDist = Infinity;
+                            for (let i = 0; i < enemies.length; i++) {
+                                const d = distSq(player.x, player.y, enemies[i].x, enemies[i].y);
+                                if (d < minDist) { minDist = d; nearest = enemies[i]; }
+                            }
+                            if (nearest && minDist <= rngSq) {
+                                const angle = Math.atan2(nearest.y - player.y, nearest.x - player.x);
+                                w.fire(player, angle, enemies);
+                                w.currentAmmo--;
+                                w.cooldownTimer = w.cooldown * player.stats.cooldownMult;
+                                if (w.currentAmmo <= 0) {
+                                    w.isReloading = true;
+                                    w.reloadTimer = w.reloadTime * player.stats.reloadMult;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 적 스폰 로직
+            enemySpawnTimer += dt * 1000;
+            if (enemySpawnTimer >= enemySpawnRate) {
+                enemySpawnTimer = 0;
+                spawnEnemy();
+                if (enemySpawnRate > 300) enemySpawnRate -= 15;
+            }
+
+            // 적 이동 & 충돌 + 충격파 넉백 효과 적용
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const angle = Math.atan2(player.y - e.y, player.x - e.x);
+                
+                let currentSpeed = e.speed;
+                if (triggerShockwave) {
+                    const dSq = distSq(player.x, player.y, e.x, e.y);
+                    const pushRadiusSq = 180 ** 2;
+                    if (dSq < pushRadiusSq) {
+                        e.x -= Math.cos(angle) * 150;
+                        e.y -= Math.sin(angle) * 150;
+                    }
+                }
+
+                e.x += Math.cos(angle) * currentSpeed * dt;
+                e.y += Math.sin(angle) * currentSpeed * dt;
+
+                if (distSq(player.x, player.y, e.x, e.y) < (player.radius + e.radius)**2) {
+                    player.hp -= (e.isBoss ? 45 : e.damage) * dt;
+                    if (player.hp <= 0) gameOver();
+                    updateHUD();
+                }
+            }
+
+            // 투사체 처리
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.x += p.vx * dt; p.y += p.vy * dt;
+
+                if (distSq(p.startX, p.startY, p.x, p.y) > p.rangeSq) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                let projDead = false;
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    if (p.hitEnemies.has(e)) continue;
+
+                    if (distSq(p.x, p.y, e.x, e.y) < (p.radius + e.radius)**2) {
+                        e.hp -= p.damage;
+                        p.hitEnemies.add(e);
+                        damageTexts.push({ x: e.x, y: e.y - 12, text: Math.floor(p.damage), life: 0.7, color: p.color });
+
+                        if (e.hp <= 0) {
+                            spawnItem(e.x, e.y, e.isElite, e.isBoss);
+                            for (let k = 0; k < (e.isBoss ? 20 : 5); k++) {
+                                particles.push({
+                                    x: e.x, y: e.y, vx: (Math.random()-0.5)*350, vy: (Math.random()-0.5)*350,
+                                    life: 0.8, color: e.color, size: Math.random()*5 + 2
+                                });
+                            }
+                            enemies.splice(j, 1);
+                            killCount++;
+                        }
+                        p.pierce--;
+                        if (p.pierce <= 0) { projDead = true; break; }
+                    }
+                }
+                if (projDead) projectiles.splice(i, 1);
+            }
+
+            // 아이템 수집
+            const pickupSq = player.pickupRange ** 2;
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                const dSq = distSq(player.x, player.y, item.x, item.y);
+                if (item.collected || dSq < pickupSq) {
+                    item.collected = true;
+                    const angle = Math.atan2(player.y - item.y, player.x - item.x);
+                    item.x += Math.cos(angle) * 450 * dt;
+                    item.y += Math.sin(angle) * 450 * dt;
+
+                    if (dSq < (player.radius + item.size)**2) {
+                        if (item.type === 'xp') { player.xp += item.value; checkLevelUp(); }
+                        else if (item.type === 'gold') { sessionGold += item.value; }
+                        items.splice(i, 1);
+                    }
+                }
+            }
+
+            // 파티클 및 텍스트 정리
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx * dt; particles[i].y += particles[i].vy * dt;
+                particles[i].life -= dt * 2;
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+            for (let i = damageTexts.length - 1; i >= 0; i--) {
+                damageTexts[i].y -= 25 * dt; damageTexts[i].life -= dt;
+                if (damageTexts[i].life <= 0) damageTexts.splice(i, 1);
+            }
+
+            camera.x = lerp(camera.x, player.x, 0.1);
+            camera.y = lerp(camera.y, player.y, 0.1);
+            camera.scale = lerp(camera.scale, player.weapon ? player.weapon.cameraScale : 1.0, 0.05);
+
+            if (Math.floor(gameTimer) !== Math.floor(gameTimer - dt)) updateHUD();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (gameState !== 'PLAYING') return;
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.scale, camera.scale);
+            ctx.translate(-camera.x, -camera.y);
+
+            // 격자 배경
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 2;
+            const size = 100;
+            const sx = Math.floor((camera.x - canvas.width/2/camera.scale) / size) * size;
+            const ex = Math.ceil((camera.x + canvas.width/2/camera.scale) / size) * size;
+            const sy = Math.floor((camera.y - canvas.height/2/camera.scale) / size) * size;
+            const ey = Math.ceil((camera.y + canvas.height/2/camera.scale) / size) * size;
+            ctx.beginPath();
+            for (let x = sx; x <= ex; x += size) { ctx.moveTo(x, sy); ctx.lineTo(x, ey); }
+            for (let y = sy; y <= ey; y += size) { ctx.moveTo(sx, y); ctx.lineTo(ex, y); }
+            ctx.stroke();
+
+            // 아이템
+            for (const item of items) {
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                if (item.type === 'gold') ctx.rect(item.x - item.size, item.y - item.size, item.size*2, item.size*2);
+                else {
+                    ctx.moveTo(item.x, item.y - item.size); ctx.lineTo(item.x + item.size, item.y);
+                    ctx.lineTo(item.x, item.y + item.size); ctx.lineTo(item.x - item.size, item.y);
+                }
+                ctx.fill();
+            }
+
+            // 적
+            for (const e of enemies) {
+                ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fillStyle = e.color; ctx.fill();
+                if (e.isBoss) {
+                    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 4; ctx.stroke();
+                }
+                if (e.hp < e.maxHp) {
+                    ctx.fillStyle = 'rgba(255,0,0,0.5)'; ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, e.radius*2, 5);
+                    ctx.fillStyle = '#22c55e'; ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, (e.radius*2)*(e.hp/e.maxHp), 5);
+                }
+            }
+
+            // 투사체
+            for (const p of projectiles) {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+                ctx.fill(); ctx.shadowBlur = 0;
+            }
+
+            // 플레이어
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#3b82f6'; ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 15;
+            ctx.fill(); ctx.shadowBlur = 0;
+
+            // 파티클 & 데미지
+            for (const p of particles) {
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.font = 'bold 15px Inter, sans-serif'; ctx.textAlign = 'center';
+            for (const t of damageTexts) {
+                ctx.globalAlpha = t.life; ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
+            }
+            ctx.globalAlpha = 1.0;
+
+            ctx.restore();
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60).toString().padStart(2, '0');
+            const sec = Math.floor(s % 60).toString().padStart(2, '0');
+            return `${m}:${sec}`;
+        }
+
+        function updateHUD() {
+            const wTimerSec = Math.floor(waveTimer);
+            document.getElementById('wave-display').innerText = `WAVE ${waveNumber} (${formatTime(wTimerSec)} / 02:00)`;
+            document.getElementById('kill-display').innerText = killCount;
+            document.getElementById('ingame-gold-display').innerText = sessionGold;
+            
+            const w = player.weapon;
+            if (w) {
+                const ammoDisplay = document.getElementById('ammo-display');
+                if (w.isReloading) {
+                    ammoDisplay.innerText = `RELOADING...`;
+                    ammoDisplay.className = "text-xl font-black text-red-400 animate-pulse";
+                } else {
+                    ammoDisplay.innerText = `${w.currentAmmo} / ${w.maxAmmo}`;
+                    ammoDisplay.className = "text-xl font-black text-cyan-300";
+                }
+            }
+
+            const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('hp-bar').style.width = `${hpPct}%`;
+            document.getElementById('hp-text').innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
+            
+            document.getElementById('level-display').innerText = `LV. ${player.level}`;
+            document.getElementById('xp-text').innerText = `${player.xp} / ${player.maxXp}`;
+            document.getElementById('xp-bar').style.width = `${(player.xp / player.maxXp) * 100}%`;
+        }
+
+        function startGame(weaponKey) {
+            if (!saveData.unlockedWeapons[weaponKey]) return;
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('xp-container').classList.remove('hidden');
+            
+            player.x = 0; player.y = 0; player.level = 1; player.xp = 0; player.maxXp = 100;
+            player.passives = JSON.parse(JSON.stringify(PASSIVES_DATA));
+            calcPlayerStats();
+            player.hp = player.maxHp;
+            
+            player.weapon = createWeaponInstance(weaponKey);
+            camera.x = 0; camera.y = 0; camera.scale = 1.0;
+
+            enemies = []; projectiles = []; particles = []; damageTexts = []; items = [];
+            gameTimer = 0; waveTimer = 0; waveNumber = 1; killCount = 0; sessionGold = 0;
+            enemySpawnTimer = 0; enemySpawnRate = 900; enemyHpMultiplier = 1.0;
+
+            gameState = 'PLAYING';
+            lastTime = performance.now();
+            updateHUD();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            cancelAnimationFrame(animationFrameId);
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('xp-container').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.remove('hidden');
+            
+            document.getElementById('final-wave').innerText = `WAVE ${waveNumber}`;
+            document.getElementById('final-level').innerText = `LV.${player.level}`;
+            document.getElementById('final-kills').innerText = killCount;
+            
+            const totalGold = sessionGold + Math.floor(killCount / 8) + (waveNumber * 25);
+            document.getElementById('final-gold').innerText = totalGold;
+            saveData.gold += totalGold;
+            saveGameData();
+        }
+
+        function resetGame() {
+            document.getElementById('gameover-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateShopUI();
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState === 'PLAYING') {
+                const dt = (timestamp - lastTime) / 1000;
+                lastTime = timestamp;
+                if (dt < 0.1) { update(dt); draw(); }
+            } else if (gameState === 'LEVELUP') {
+                draw();
+            }
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        loadSave();
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </script>
+</body>
+</html>
