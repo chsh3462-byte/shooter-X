@@ -78,19 +78,19 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                 <button onclick="startGame('pistol')" class="btn-hover bg-zinc-800/80 border-2 border-yellow-500 text-yellow-500 p-4 rounded-xl flex flex-col items-center">
                     <span class="text-2xl font-bold mb-1">권총 (Pistol)</span>
-                    <span class="text-sm opacity-80 text-gray-300">기본 무기. 밸런스형, 장전 속도 빠름.</span>
+                    <span class="text-sm opacity-80 text-gray-300">밸런스형. 장전 속도가 빠르고 안정적.</span>
                 </button>
-                <button id="btn-sel-machinegun" onclick="startGame('machinegun')" class="btn-hover bg-zinc-800/80 border-2 border-orange-500 text-orange-500 p-4 rounded-xl flex flex-col items-center relative">
+                <button onclick="startGame('machinegun')" class="btn-hover bg-zinc-800/80 border-2 border-orange-500 text-orange-500 p-4 rounded-xl flex flex-col items-center">
                     <span class="text-2xl font-bold mb-1">기관총 (Machine Gun)</span>
-                    <span id="desc-machinegun" class="text-sm opacity-80 text-gray-300">대용량 탄창과 빠른 연사력.</span>
+                    <span class="text-sm opacity-80 text-gray-300">대용량 탄창과 빠른 연사력.</span>
                 </button>
-                <button id="btn-sel-shotgun" onclick="startGame('shotgun')" class="btn-hover bg-zinc-800/80 border-2 border-red-500 text-red-500 p-4 rounded-xl flex flex-col items-center relative">
+                <button onclick="startGame('shotgun')" class="btn-hover bg-zinc-800/80 border-2 border-red-500 text-red-500 p-4 rounded-xl flex flex-col items-center">
                     <span class="text-2xl font-bold mb-1">샷건 (Shotgun)</span>
-                    <span id="desc-shotgun" class="text-sm opacity-80 text-gray-300">근접 산탄 사격 및 묵직한 한 방.</span>
+                    <span class="text-sm opacity-80 text-gray-300">근접 산탄 사격 및 묵직한 한 방.</span>
                 </button>
-                <button id="btn-sel-sniper" onclick="startGame('sniper')" class="btn-hover bg-zinc-800/80 border-2 border-cyan-500 text-cyan-500 p-4 rounded-xl flex flex-col items-center relative">
+                <button onclick="startGame('sniper')" class="btn-hover bg-zinc-800/80 border-2 border-cyan-500 text-cyan-500 p-4 rounded-xl flex flex-col items-center">
                     <span class="text-2xl font-bold mb-1">저격총 (Sniper)</span>
-                    <span id="desc-sniper" class="text-sm opacity-80 text-gray-300">광활한 시야와 관통형 고위력 탄환.</span>
+                    <span class="text-sm opacity-80 text-gray-300">광활한 시야와 관통형 고위력 탄환.</span>
                 </button>
             </div>
             
@@ -133,33 +133,6 @@
                         <span id="cost-spd">100</span> G
                     </button>
                 </div>
-
-                <div class="border-t border-gray-700 pt-4 mt-4">
-                    <h3 class="text-lg font-bold text-yellow-400 mb-3">무기 해제 (Unlock Weapons)</h3>
-                    <div class="grid grid-cols-1 gap-3">
-                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                            <div>
-                                <h4 class="text-lg font-bold text-red-400">샷건 잠금 해제</h4>
-                                <p class="text-xs text-gray-400">근접 산탄 사격 및 묵직한 한 방</p>
-                            </div>
-                            <button onclick="buyWeaponUnlock('shotgun')" id="btn-lock-shotgun" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">500 G</button>
-                        </div>
-                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                            <div>
-                                <h4 class="text-lg font-bold text-cyan-400">저격총 잠금 해제</h4>
-                                <p class="text-xs text-gray-400">광활한 시야와 관통형 고위력 탄환</p>
-                            </div>
-                            <button onclick="buyWeaponUnlock('sniper')" id="btn-lock-sniper" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">3,200 G</button>
-                        </div>
-                        <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                            <div>
-                                <h4 class="text-lg font-bold text-orange-400">기관총 잠금 해제</h4>
-                                <p class="text-xs text-gray-400">대용량 탄창과 빠른 연사력</p>
-                            </div>
-                            <button onclick="buyWeaponUnlock('machinegun')" id="btn-lock-machinegun" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold">5,000 G</button>
-                        </div>
-                    </div>
-                </div>
             </div>
             
             <div class="mt-8 text-center">
@@ -201,16 +174,12 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        let saveData = { gold: 0, upgrades: { dmg: 0, hp: 0, spd: 0 }, unlockedWeapons: { pistol: true, shotgun: false, sniper: false, machinegun: false } };
+        let saveData = { gold: 0, upgrades: { dmg: 0, hp: 0, spd: 0 } };
         
         function loadSave() {
             try {
                 const saved = localStorage.getItem('survivorXSave');
-                if (saved) {
-                    let parsed = JSON.parse(saved);
-                    saveData = { ...saveData, ...parsed };
-                    if (!saveData.unlockedWeapons) saveData.unlockedWeapons = { pistol: true, shotgun: false, sniper: false, machinegun: false };
-                }
+                if (saved) saveData = JSON.parse(saved);
                 if (saveData.gold === undefined) saveData.gold = 0;
                 if (!saveData.upgrades) saveData.upgrades = { dmg: 0, hp: 0, spd: 0 };
             } catch (e) {}
@@ -240,40 +209,6 @@
                     if (lvl >= 10) btn.innerText = "MAX";
                 }
             });
-
-            // 무기 해제 버튼 UI 갱신
-            const weaponUnlocks = [
-                { id: 'shotgun', cost: 500 },
-                { id: 'sniper', cost: 3200 },
-                { id: 'machinegun', cost: 5000 }
-            ];
-
-            weaponUnlocks.forEach(w => {
-                const btn = document.getElementById(`btn-lock-${w.id}`);
-                const selBtn = document.getElementById(`btn-sel-${w.id}`);
-                const isUnlocked = saveData.unlockedWeapons[w.id];
-
-                if (isUnlocked) {
-                    btn.innerText = "해제됨";
-                    btn.disabled = true;
-                    btn.className = "bg-green-700 text-white px-6 py-2 rounded-lg font-bold opacity-70 cursor-not-allowed";
-                    
-                    selBtn.disabled = false;
-                    selBtn.classList.remove('opacity-40', 'cursor-not-allowed');
-                } else {
-                    btn.innerText = `${w.cost.toLocaleString()} G`;
-                    if (saveData.gold >= w.cost) {
-                        btn.disabled = false;
-                        btn.className = "bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold";
-                    } else {
-                        btn.disabled = true;
-                        btn.className = "bg-yellow-600/50 text-white px-6 py-2 rounded-lg font-bold opacity-50 cursor-not-allowed";
-                    }
-
-                    selBtn.disabled = true;
-                    selBtn.classList.add('opacity-40', 'cursor-not-allowed');
-                }
-            });
         }
 
         function buyUpgrade(type) {
@@ -281,16 +216,6 @@
             if (saveData.gold >= cost && saveData.upgrades[type] < 10) {
                 saveData.gold -= cost;
                 saveData.upgrades[type]++;
-                saveGameData();
-            }
-        }
-
-        function buyWeaponUnlock(weaponId) {
-            let costs = { shotgun: 500, sniper: 3200, machinegun: 5000 };
-            let cost = costs[weaponId];
-            if (!saveData.unlockedWeapons[weaponId] && saveData.gold >= cost) {
-                saveData.gold -= cost;
-                saveData.unlockedWeapons[weaponId] = true;
                 saveGameData();
             }
         }
@@ -975,7 +900,6 @@
         }
 
         function startGame(weaponKey) {
-            if (!saveData.unlockedWeapons[weaponKey]) return;
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('hud').classList.remove('hidden');
             document.getElementById('xp-container').classList.remove('hidden');
