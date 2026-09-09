@@ -3,963 +3,1062 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Survival Shooter - Waves, Bosses & Reload System</title>
+    <title>SURVIVOR X v4.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
-            background-color: #111; color: white; user-select: none;
-            font-family: 'Inter', sans-serif;
-            -webkit-touch-callout: none;
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        body { 
+            margin: 0; overflow: hidden; background-color: #050505; 
+            touch-action: none; font-family: 'Orbitron', sans-serif; user-select: none;
+            -webkit-user-select: none;
         }
-        canvas { display: block; width: 100%; height: 100%; }
-        ::-webkit-scrollbar { display: none; }
+        canvas { display: block; }
         
-        .btn-hover { transition: all 0.2s ease; }
-        .btn-hover:hover { transform: scale(1.05); box-shadow: 0 0 15px currentColor; }
-        .card-hover { transition: transform 0.2s, border-color 0.2s; }
-        .card-hover:hover { transform: translateY(-5px) scale(1.02); border-color: #fff; }
+        .damage-flash { animation: flash 0.2s ease-out; }
+        @keyframes flash { 0% { box-shadow: inset 0 0 150px rgba(255, 0, 0, 0.8); } 100% { box-shadow: none; } }
         
-        .text-shadow { text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
-        .glass-panel { background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .low-hp-pulse { animation: pulseBorder 1s infinite alternate; }
+        @keyframes pulseBorder { 0% { box-shadow: inset 0 0 20px rgba(255, 0, 0, 0.5); } 100% { box-shadow: inset 0 0 80px rgba(255, 0, 0, 0.9); } }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        .crt-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            position: absolute; inset: 0; z-index: 50;
+        }
     </style>
 </head>
-<body>
+<body class="text-white">
 
-    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
-        <!-- Top Info: XP Bar & Wave Info -->
-        <div id="xp-container" class="hidden w-full max-w-3xl mx-auto mt-2">
-            <div class="flex justify-between items-center text-xs font-bold mb-1 px-1">
-                <span id="level-display" class="text-blue-400 text-shadow text-base">LV. 1</span>
-                <span id="wave-display" class="text-yellow-400 text-shadow text-base">WAVE 1 (00:00)</span>
-                <span id="xp-text" class="text-gray-300 text-shadow">0 / 100</span>
+    <div class="crt-overlay"></div>
+
+    <!-- Main Menu & Shop -->
+    <div id="main-menu" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-40 transition-opacity duration-300">
+        <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500 mb-2 tracking-wider uppercase text-center" style="filter: drop-shadow(0 0 10px rgba(255,0,0,0.5));">SURVIVOR X</h1>
+        <p class="text-gray-400 mb-8 tracking-widest text-sm">v4.3 EDITION (WEAPON RANGE ADJUSTED)</p>
+        
+        <div class="flex gap-4 mb-8">
+            <div class="bg-gray-900 border border-gray-700 p-4 rounded-xl w-64 shadow-lg">
+                <h2 class="text-xl font-bold text-yellow-400 mb-2 border-b border-gray-700 pb-2">STATS</h2>
+                <p>Total Gold: <span id="menu-gold" class="text-yellow-300 font-bold">0</span> G</p>
+                <div class="mt-4 space-y-2 text-sm">
+                    <button onclick="buyUpgrade('attack')" class="w-full bg-gray-800 hover:bg-gray-700 p-2 rounded flex justify-between">
+                        <span>ATK Up (<span id="upg-attack-lv">0</span>)</span> <span id="upg-attack-cost" class="text-yellow-400">100G</span>
+                    </button>
+                    <button onclick="buyUpgrade('maxHp')" class="w-full bg-gray-800 hover:bg-gray-700 p-2 rounded flex justify-between">
+                        <span>HP Up (<span id="upg-maxHp-lv">0</span>)</span> <span id="upg-maxHp-cost" class="text-yellow-400">100G</span>
+                    </button>
+                    <button onclick="buyUpgrade('moveSpeed')" class="w-full bg-gray-800 hover:bg-gray-700 p-2 rounded flex justify-between">
+                        <span>SPD Up (<span id="upg-moveSpeed-lv">0</span>)</span> <span id="upg-moveSpeed-cost" class="text-yellow-400">100G</span>
+                    </button>
+                </div>
             </div>
-            <div class="h-4 bg-gray-800 rounded-full border border-gray-600 overflow-hidden relative shadow-lg">
-                <div id="xp-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 w-0 transition-all duration-300"></div>
+
+            <div class="bg-gray-900 border border-gray-700 p-4 rounded-xl w-80 shadow-lg h-72 overflow-y-auto">
+                <h2 class="text-xl font-bold text-blue-400 mb-2 border-b border-gray-700 pb-2">ARMORY</h2>
+                <div id="weapon-list" class="space-y-2"></div>
+            </div>
+        </div>
+        
+        <button onclick="startGame()" class="px-12 py-4 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black text-2xl rounded-full shadow-[0_0_20px_rgba(255,0,0,0.5)] transform transition hover:scale-105 active:scale-95">
+            INITIATE DEPLOYMENT
+        </button>
+    </div>
+
+    <!-- In-Game HUD -->
+    <div id="hud" class="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between hidden z-20">
+        <div class="flex justify-between items-start">
+            <div class="bg-black/50 p-3 rounded-lg border border-gray-800 backdrop-blur-sm pointer-events-auto flex flex-col gap-1">
+                <div class="flex justify-between items-center gap-4">
+                    <div>
+                        <p id="hud-wave" class="text-xl font-bold text-red-500">WAVE: 1</p>
+                        <p id="hud-time" class="text-2xl font-mono">00:00</p>
+                        <p id="hud-gold" class="text-yellow-400 font-bold flex items-center gap-1 mt-1">
+                            <span id="gold-val">0</span> G
+                        </p>
+                    </div>
+                    <button onclick="togglePause()" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs font-bold text-gray-300">PAUSE [ESC]</button>
+                </div>
+            </div>
+            
+            <div class="bg-black/50 p-3 rounded-lg border border-gray-800 backdrop-blur-sm text-right">
+                <p id="hud-weapon" class="text-lg font-bold text-blue-400">Pistol Lv.1</p>
+                <div class="text-2xl font-mono tracking-tighter mt-1">
+                    <span id="hud-ammo-current" class="text-white">12</span>
+                    <span class="text-gray-500 text-lg">/</span>
+                    <span id="hud-ammo-max" class="text-gray-400 text-lg">12</span>
+                </div>
+                <p id="hud-reloading" class="text-red-500 font-bold text-sm animate-pulse hidden">RELOADING...</p>
             </div>
         </div>
 
-        <!-- HUD: Ammo, Stats & HP -->
-        <div id="hud" class="hidden w-full flex justify-between items-end pb-4">
-            <div class="glass-panel p-3 rounded-xl flex gap-4 items-center">
-                <div>
-                    <div class="text-lg font-bold text-gray-200">KILLS: <span id="kill-display" class="text-red-400 font-bold">0</span></div>
-                    <div class="text-sm text-gray-400">GOLD: <span id="ingame-gold-display" class="text-yellow-400 font-bold">0</span></div>
-                </div>
-                <!-- Reload / Ammo Box -->
-                <div id="ammo-box" class="border-l border-gray-700 pl-4">
-                    <div class="text-xs text-gray-400">AMMO</div>
-                    <div class="text-xl font-black text-cyan-300" id="ammo-display">10 / 10</div>
-                </div>
+        <div class="w-full max-w-2xl mx-auto mb-6">
+            <div class="flex justify-between text-xs font-bold text-gray-400 mb-1 px-1">
+                <span>LV <span id="hud-level">1</span></span>
+                <span id="hud-exp-text">0 / 10</span>
             </div>
-            <div class="w-1/3 max-w-xs">
-                <div class="text-xs text-center font-bold mb-1 text-red-300 text-shadow" id="hp-text">100 / 100</div>
-                <div class="h-6 bg-red-900/50 rounded-full border border-red-500 overflow-hidden relative">
-                    <div id="hp-bar" class="h-full bg-gradient-to-r from-red-600 to-red-400 w-full transition-all duration-200"></div>
+            <div class="w-full bg-gray-900 h-2 rounded-full border border-gray-700 overflow-hidden mb-2">
+                <div id="hud-exp-bar" class="bg-blue-500 h-full w-0 transition-all duration-200"></div>
+            </div>
+            <div class="w-full bg-gray-900 h-6 rounded-full border border-gray-700 overflow-hidden relative shadow-[0_0_10px_rgba(255,0,0,0.2)]">
+                <div id="hud-hp-bar" class="bg-gradient-to-r from-red-600 to-green-500 h-full w-full transition-all duration-200"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-xs font-black drop-shadow-md">
+                    <span id="hud-hp-text">100 / 100</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-30 overflow-y-auto py-8">
-        <div class="text-center w-full max-w-3xl px-4 pointer-events-auto flex flex-col items-center">
-            <h1 class="text-5xl md:text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">SURVIVOR X</h1>
-            
-            <div class="flex items-center gap-4 mb-6">
-                <div class="glass-panel px-6 py-2 rounded-full flex items-center gap-2">
-                    <span class="text-yellow-400 font-bold text-xl">💰</span>
-                    <span id="lobby-gold" class="text-white font-bold text-xl">0</span>
-                </div>
-                <button onclick="openShop()" class="btn-hover bg-zinc-800 border border-gray-500 text-white px-6 py-2 rounded-full font-bold">영구 상점</button>
-            </div>
-
-            <p class="text-sm text-gray-400 mb-4 border-t border-gray-700 pt-4 w-full">시작 무기를 선택하면 웨이브가 시작됩니다</p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                <button onclick="startGame('pistol')" class="btn-hover bg-zinc-800/80 border-2 border-yellow-500 text-yellow-500 p-4 rounded-xl flex flex-col items-center">
-                    <span class="text-2xl font-bold mb-1">권총 (Pistol)</span>
-                    <span class="text-sm opacity-80 text-gray-300">밸런스형. 장전 속도가 빠르고 안정적.</span>
-                </button>
-                <button onclick="startGame('machinegun')" class="btn-hover bg-zinc-800/80 border-2 border-orange-500 text-orange-500 p-4 rounded-xl flex flex-col items-center">
-                    <span class="text-2xl font-bold mb-1">기관총 (Machine Gun)</span>
-                    <span class="text-sm opacity-80 text-gray-300">대용량 탄창과 빠른 연사력.</span>
-                </button>
-                <button onclick="startGame('shotgun')" class="btn-hover bg-zinc-800/80 border-2 border-red-500 text-red-500 p-4 rounded-xl flex flex-col items-center">
-                    <span class="text-2xl font-bold mb-1">샷건 (Shotgun)</span>
-                    <span class="text-sm opacity-80 text-gray-300">근접 산탄 사격 및 묵직한 한 방.</span>
-                </button>
-                <button onclick="startGame('sniper')" class="btn-hover bg-zinc-800/80 border-2 border-cyan-500 text-cyan-500 p-4 rounded-xl flex flex-col items-center">
-                    <span class="text-2xl font-bold mb-1">저격총 (Sniper)</span>
-                    <span class="text-sm opacity-80 text-gray-300">광활한 시야와 관통형 고위력 탄환.</span>
-                </button>
-            </div>
-            
-            <p class="text-gray-500 mt-6 text-sm">조작: WASD / 방향키 / 마우스 or 터치 드래그 (자동 사격 & 자동 장전)</p>
+    <!-- Pause Screen -->
+    <div id="pause-screen" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 hidden backdrop-blur-sm">
+        <h2 class="text-5xl font-black text-white mb-2 tracking-widest">PAUSED</h2>
+        <p class="text-gray-400 mb-8">SYSTEM HALTED</p>
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="togglePause()" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-lg border border-blue-400">
+                RESUME
+            </button>
+            <button onclick="returnToMenu()" class="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded shadow-lg border border-gray-600">
+                ABORT TO BASE
+            </button>
         </div>
     </div>
 
-    <div id="shop-screen" class="absolute inset-0 flex items-center justify-center bg-black/95 z-40 hidden overflow-y-auto">
-        <div class="w-full max-w-2xl p-6 pointer-events-auto">
-            <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
-                <h2 class="text-3xl font-black text-white">영구 업그레이드 상점</h2>
-                <div class="text-xl font-bold text-yellow-400">보유 골드: <span id="shop-gold">0</span></div>
-            </div>
-            
-            <div class="space-y-4">
-                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                        <h3 class="text-xl font-bold text-red-400">기본 공격력 강화</h3>
-                        <p class="text-sm text-gray-400">모든 무기 피해량 10% 증가 (현재 LV.<span id="upg-dmg-lvl">0</span>)</p>
-                    </div>
-                    <button onclick="buyUpgrade('dmg')" id="btn-upg-dmg" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg font-bold">
-                        <span id="cost-dmg">100</span> G
-                    </button>
-                </div>
-                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                        <h3 class="text-xl font-bold text-green-400">최대 체력 강화</h3>
-                        <p class="text-sm text-gray-400">최대 체력 +20 증가 (현재 LV.<span id="upg-hp-lvl">0</span>)</p>
-                    </div>
-                    <button onclick="buyUpgrade('hp')" id="btn-upg-hp" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold">
-                        <span id="cost-hp">100</span> G
-                    </button>
-                </div>
-                <div class="glass-panel p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                        <h3 class="text-xl font-bold text-blue-400">이동 속도 강화</h3>
-                        <p class="text-sm text-gray-400">이동 속도 5% 증가 (현재 LV.<span id="upg-spd-lvl">0</span>)</p>
-                    </div>
-                    <button onclick="buyUpgrade('spd')" id="btn-upg-spd" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold">
-                        <span id="cost-spd">100</span> G
-                    </button>
-                </div>
-            </div>
-            
-            <div class="mt-8 text-center">
-                <button onclick="closeShop()" class="bg-gray-600 hover:bg-gray-500 text-white px-8 py-3 rounded-full font-bold text-lg">돌아가기</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Level Up Modal -->
-    <div id="levelup-screen" class="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-40 hidden">
-        <div class="text-center w-full max-w-4xl px-4 pointer-events-auto">
-            <h1 class="text-5xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 animate-pulse">LEVEL UP!</h1>
-            <p class="text-gray-200 mb-6 text-lg">무기 강화, 스탯 증가, 패시브 능력을 선택하세요</p>
-            
-            <div id="levelup-choices" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
-        </div>
+    <!-- Level Up Screen -->
+    <div id="levelup-screen" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 hidden backdrop-blur-sm">
+        <h2 class="text-4xl font-black text-blue-400 mb-8 animate-bounce">LEVEL UP</h2>
+        <div id="upgrade-options" class="flex gap-4 w-full max-w-4xl px-4 justify-center"></div>
     </div>
 
     <!-- Game Over Screen -->
-    <div id="gameover-screen" class="absolute inset-0 flex items-center justify-center bg-red-950/90 backdrop-blur-md z-50 hidden pointer-events-auto">
-        <div class="text-center p-8 bg-black/60 rounded-3xl border border-red-500 max-w-md w-full">
-            <h1 class="text-5xl font-black text-red-500 mb-2 text-shadow">GAME OVER</h1>
-            <h2 id="gameover-reason" class="text-xl font-bold text-yellow-300 mb-4">전투에서 패배했습니다</h2>
-            
-            <div class="space-y-3 mb-8 text-left px-4">
-                <p class="text-lg text-gray-300 flex justify-between"><span>도달 웨이브:</span> <span id="final-wave" class="font-bold text-yellow-400">WAVE 1</span></p>
-                <p class="text-lg text-gray-300 flex justify-between"><span>최종 레벨:</span> <span id="final-level" class="font-bold text-blue-400">1</span></p>
-                <p class="text-lg text-gray-300 flex justify-between"><span>처치한 적:</span> <span id="final-kills" class="font-bold text-red-400">0</span></p>
-                <p class="text-lg text-gray-300 flex justify-between border-t border-gray-700 pt-3 mt-3"><span>획득 골드:</span> <span class="font-bold text-yellow-400">+<span id="final-gold">0</span> G</span></p>
-            </div>
-            
-            <button onclick="resetGame()" class="w-full bg-white text-black py-4 rounded-xl font-bold text-xl hover:bg-gray-200 transition shadow-lg">메인 메뉴로</button>
-        </div>
+    <div id="gameover-screen" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-40 hidden backdrop-blur-md">
+        <h2 class="text-6xl font-black text-red-600 mb-4 tracking-widest shadow-red-500/50 drop-shadow-lg">SYSTEM FAILURE</h2>
+        <p class="text-xl text-gray-300 mb-2">Survived until Wave: <span id="go-wave" class="text-white font-bold"></span></p>
+        <p class="text-xl text-gray-300 mb-8">Gold Collected: <span id="go-gold" class="text-yellow-400 font-bold"></span> G</p>
+        <button onclick="returnToMenu()" class="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded shadow-lg border border-gray-600">
+            RETURN TO BASE
+        </button>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
+    <!-- Mobile Joystick -->
+    <div id="joystick-zone" class="absolute bottom-12 left-12 w-32 h-32 bg-white/5 rounded-full border border-white/20 z-20 md:hidden touch-none">
+        <div id="joystick-knob" class="w-12 h-12 bg-white/40 rounded-full absolute top-10 left-10 pointer-events-none shadow-lg backdrop-blur-sm transition-transform duration-75"></div>
+    </div>
+
+    <canvas id="gameCanvas" class="z-10"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        let width, height;
         
-        let saveData = { gold: 0, upgrades: { dmg: 0, hp: 0, spd: 0 } };
-        
-        function loadSave() {
-            try {
-                const saved = localStorage.getItem('survivorXSave');
-                if (saved) saveData = JSON.parse(saved);
-                if (saveData.gold === undefined) saveData.gold = 0;
-                if (!saveData.upgrades) saveData.upgrades = { dmg: 0, hp: 0, spd: 0 };
-            } catch (e) {}
-            updateShopUI();
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
         }
-
-        function saveGameData() {
-            try { localStorage.setItem('survivorXSave', JSON.stringify(saveData)); } catch (e) {}
-            updateShopUI();
-        }
-
-        function getUpgradeCost(type) { return 100 + (saveData.upgrades[type] * 150); }
-
-        function updateShopUI() {
-            document.getElementById('lobby-gold').innerText = saveData.gold;
-            document.getElementById('shop-gold').innerText = saveData.gold;
-            ['dmg', 'hp', 'spd'].forEach(type => {
-                const lvl = saveData.upgrades[type];
-                const cost = getUpgradeCost(type);
-                document.getElementById(`upg-${type}-lvl`).innerText = lvl;
-                document.getElementById(`cost-${type}`).innerText = cost;
-                const btn = document.getElementById(`btn-upg-${type}`);
-                if (saveData.gold >= cost && lvl < 10) {
-                    btn.disabled = false; btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                } else {
-                    btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    if (lvl >= 10) btn.innerText = "MAX";
-                }
-            });
-        }
-
-        function buyUpgrade(type) {
-            const cost = getUpgradeCost(type);
-            if (saveData.gold >= cost && saveData.upgrades[type] < 10) {
-                saveData.gold -= cost;
-                saveData.upgrades[type]++;
-                saveGameData();
-            }
-        }
-
-        function openShop() { document.getElementById('shop-screen').classList.remove('hidden'); }
-        function closeShop() { document.getElementById('shop-screen').classList.add('hidden'); }
-
-        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.addEventListener('resize', resize);
         resize();
 
-        const distSq = (x1, y1, x2, y2) => (x2 - x1)**2 + (y2 - y1)**2;
-        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
-
-        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
-        const pointer = { active: false, x: 0, y: 0 };
-
-        window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = true; });
-        window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+        const DEFAULT_SAVE = {
+            gold: 0,
+            weapons: { pistol: true, shotgun: false, sniper: false, machinegun: false },
+            upgrades: { attack: 0, maxHp: 0, moveSpeed: 0 },
+            equipped: 'pistol'
+        };
+        let saveData = JSON.parse(localStorage.getItem('survivorXv43Save')) || DEFAULT_SAVE;
+        function saveGame() { localStorage.setItem('survivorXv43Save', JSON.stringify(saveData)); }
         
-        canvas.addEventListener('mousedown', e => { pointer.active = true; updatePointer(e); });
-        canvas.addEventListener('mousemove', e => { if(pointer.active) updatePointer(e); });
-        window.addEventListener('mouseup', () => pointer.active = false);
-        canvas.addEventListener('touchstart', e => { pointer.active = true; updatePointer(e.touches[0]); });
-        canvas.addEventListener('touchmove', e => { if(pointer.active) updatePointer(e.touches[0]); e.preventDefault(); }, {passive: false});
-        window.addEventListener('touchend', () => pointer.active = false);
-
-        function updatePointer(e) { pointer.x = e.clientX; pointer.y = e.clientY; }
-
-        const WEAPONS_DATA = {
+        // 권총(pistol): 사거리(bullet speed & life) 대폭 증가 및 에볼루션 시 장거리 저격형 성능 부여
+        // 샷건(shotgun): 레벨업에 따라 탄 퍼짐각(spread)과 탄환 개수(pellets), 사거리(life) 조절
+        const WEAPON_DATA = {
             pistol: {
-                id: 'pistol', name: "권총", color: "#eab308", baseCooldown: 400,
-                baseDamage: 30, speed: 16, range: 450, pierce: 1, count: 1, spread: 0, 
-                cameraScale: 1.0, projectileRadius: 4, maxAmmo: 12, reloadTime: 1200,
-                fire: function(p, targetAngle, enemiesList) {
-                    spawnProjectile(p, targetAngle, this);
-                },
-                getDescription: function(lv) {
-                    if (lv === 4) return "[진화] 쌍권총: 탄창 12발, 2개의 적을 동시에 타겟팅하여 양손 사격";
-                    if (lv === 9) return "[최종 진화] 아킴보: 탄창 16발, 여러 적을 향해 탄수 적지만 폭풍 연사";
-                    return `피해량 +20%, 탄창 및 장전속도 개선`;
-                }
-            },
-            machinegun: {
-                id: 'machinegun', name: "기관총", color: "#f97316", baseCooldown: 100,
-                baseDamage: 12, speed: 18, range: 350, pierce: 1, count: 1, spread: 0.3, 
-                cameraScale: 1.0, projectileRadius: 3, maxAmmo: 40, reloadTime: 1800,
-                fire: function(p, targetAngle) {
-                    const finalAngle = targetAngle + (Math.random() * this.spread - this.spread/2);
-                    spawnProjectile(p, finalAngle, this);
-                },
-                getDescription: function(lv) {
-                    if (lv === 4) return "[진화] 미니건: 탄창 80발, 극한의 연사력";
-                    if (lv === 9) return "[최종 진화] 플라즈마 머신건: 탄창 150발, 플라즈마 탄환 관통";
-                    return `피해량 +15%, 탄창 용량 대폭 증가`;
-                }
+                id: 'pistol', name: 'Pistol', cost: 0,
+                levels: [
+                    { dmg: 30, cd: 0.4, mag: 12, maxMag: 12, reload: 1.5, pierce: 0, targets: 1, speed: 900, life: 1.8, type: 'normal' },
+                    { dmg: 40, cd: 0.35, mag: 15, maxMag: 15, reload: 1.4, pierce: 0, targets: 1, speed: 950, life: 1.9, type: 'normal' },
+                    { dmg: 50, cd: 0.3, mag: 18, maxMag: 18, reload: 1.3, pierce: 0, targets: 1, speed: 1000, life: 2.0, type: 'normal' },
+                    { dmg: 60, cd: 0.3, mag: 20, maxMag: 20, reload: 1.2, pierce: 0, targets: 1, speed: 1050, life: 2.1, type: 'normal' },
+                    { dmg: 70, cd: 0.3, mag: 24, maxMag: 24, reload: 1.2, pierce: 0, targets: 2, speed: 1100, life: 2.2, type: 'dual', name: 'Dual Pistols' },
+                    { dmg: 80, cd: 0.25, mag: 24, maxMag: 24, reload: 1.1, pierce: 0, targets: 2, speed: 1150, life: 2.3, type: 'dual' },
+                    { dmg: 90, cd: 0.25, mag: 26, maxMag: 26, reload: 1.1, pierce: 0, targets: 2, speed: 1200, life: 2.4, type: 'dual' },
+                    { dmg: 100, cd: 0.2, mag: 28, maxMag: 28, reload: 1.0, pierce: 0, targets: 2, speed: 1250, life: 2.5, type: 'dual' },
+                    { dmg: 110, cd: 0.2, mag: 30, maxMag: 30, reload: 1.0, pierce: 0, targets: 2, speed: 1300, life: 2.6, type: 'dual' },
+                    { dmg: 130, cd: 0.15, mag: 35, maxMag: 35, reload: 0.9, pierce: 1, targets: 3, speed: 1500, life: 3.0, type: 'akimbo', name: 'Akimbo Blasters' },
+                ]
             },
             shotgun: {
-                id: 'shotgun', name: "샷건", color: "#ef4444", baseCooldown: 900,
-                baseDamage: 25, speed: 14, range: 300, pierce: 1, count: 5, spread: 0.6, 
-                cameraScale: 1.0, projectileRadius: 4, maxAmmo: 6, reloadTime: 2000,
-                fire: function(p, targetAngle, enemiesList) {
-                    for (let i = 0; i < this.count; i++) {
-                        const angleOffset = (i - (this.count - 1) / 2) * (this.spread / Math.max(1, this.count - 1));
-                        spawnProjectile(p, targetAngle + angleOffset, this);
-                    }
-                },
-                getDescription: function(lv) {
-                    if (lv === 4) return "[진화] 전투 샷건: 탄창 10발, 산탄 수 8발로 증가";
-                    if (lv === 9) return "[최종 진화] 지옥불 산탄포: 탄창 16발, 광범위 화염 폭풍";
-                    return `산탄 수 증가 또는 피해량 +25%`;
-                }
+                id: 'shotgun', name: 'Shotgun', cost: 500,
+                levels: [
+                    { dmg: 25, cd: 0.8, mag: 6, maxMag: 6, reload: 2.0, pierce: 0, pellets: 5, spread: 0.5, speed: 650, life: 0.8, type: 'spread' },
+                    { dmg: 30, cd: 0.75, mag: 6, maxMag: 6, reload: 1.9, pierce: 0, pellets: 6, spread: 0.55, speed: 680, life: 0.85, type: 'spread' },
+                    { dmg: 35, cd: 0.7, mag: 8, maxMag: 8, reload: 1.8, pierce: 0, pellets: 6, spread: 0.6, speed: 700, life: 0.9, type: 'spread' },
+                    { dmg: 40, cd: 0.7, mag: 8, maxMag: 8, reload: 1.7, pierce: 0, pellets: 7, spread: 0.65, speed: 720, life: 0.95, type: 'spread' },
+                    { dmg: 50, cd: 0.6, mag: 10, maxMag: 10, reload: 1.5, pierce: 1, pellets: 8, spread: 0.7, speed: 750, life: 1.0, type: 'spread', name: 'Combat Shotgun' },
+                    { dmg: 55, cd: 0.6, mag: 10, maxMag: 10, reload: 1.4, pierce: 1, pellets: 9, spread: 0.75, speed: 780, life: 1.05, type: 'spread' },
+                    { dmg: 60, cd: 0.55, mag: 12, maxMag: 12, reload: 1.4, pierce: 1, pellets: 10, spread: 0.8, speed: 800, life: 1.1, type: 'spread' },
+                    { dmg: 70, cd: 0.55, mag: 12, maxMag: 12, reload: 1.3, pierce: 1, pellets: 11, spread: 0.85, speed: 830, life: 1.15, type: 'spread' },
+                    { dmg: 80, cd: 0.5, mag: 14, maxMag: 14, reload: 1.3, pierce: 1, pellets: 12, spread: 0.9, speed: 860, life: 1.2, type: 'spread' },
+                    { dmg: 130, cd: 0.4, mag: 16, maxMag: 16, reload: 1.0, pierce: 3, pellets: 16, spread: 1.1, speed: 950, life: 1.5, type: 'hellfire', name: 'Hellfire Cannon' },
+                ]
             },
             sniper: {
-                id: 'sniper', name: "저격총", color: "#06b6d4", baseCooldown: 1500,
-                baseDamage: 160, speed: 26, range: 1000, pierce: 4, count: 1, spread: 0, 
-                cameraScale: 0.6, projectileRadius: 6, maxAmmo: 4, reloadTime: 2200,
-                fire: function(p, targetAngle, enemiesList) { spawnProjectile(p, targetAngle, this); },
-                getDescription: function(lv) {
-                    if (lv === 4) return "[진화] 레일건: 탄창 8발, 초고속 관통 탄환";
-                    if (lv === 9) return "[최종 진화] 펄스 레일 블라스터: 탄창 12발, 파괴적 거대 빔";
-                    return `피해량 +30%, 관통력 및 탄창 증가`;
-                }
+                id: 'sniper', name: 'Sniper', cost: 3200,
+                levels: [
+                    { dmg: 150, cd: 1.5, mag: 5, maxMag: 5, reload: 2.5, pierce: 3, radius: 4, speed: 1500, life: 2.0, type: 'pierce' },
+                    { dmg: 200, cd: 1.4, mag: 5, maxMag: 5, reload: 2.4, pierce: 4, radius: 4, speed: 1500, life: 2.0, type: 'pierce' },
+                    { dmg: 250, cd: 1.3, mag: 6, maxMag: 6, reload: 2.3, pierce: 4, radius: 4, speed: 1600, life: 2.1, type: 'pierce' },
+                    { dmg: 300, cd: 1.2, mag: 6, maxMag: 6, reload: 2.2, pierce: 5, radius: 5, speed: 1600, life: 2.1, type: 'pierce' },
+                    { dmg: 450, cd: 1.0, mag: 8, maxMag: 8, reload: 2.0, pierce: 8, radius: 8, speed: 1800, life: 2.5, type: 'railgun', name: 'Railgun' },
+                    { dmg: 550, cd: 0.9, mag: 8, maxMag: 8, reload: 1.9, pierce: 8, radius: 8, speed: 1800, life: 2.5, type: 'railgun' },
+                    { dmg: 650, cd: 0.9, mag: 10, maxMag: 10, reload: 1.8, pierce: 9, radius: 10, speed: 1900, life: 2.6, type: 'railgun' },
+                    { dmg: 750, cd: 0.8, mag: 10, maxMag: 10, reload: 1.7, pierce: 9, radius: 10, speed: 1900, life: 2.6, type: 'railgun' },
+                    { dmg: 850, cd: 0.8, mag: 12, maxMag: 12, reload: 1.6, pierce: 10, radius: 12, speed: 2000, life: 2.8, type: 'railgun' },
+                    { dmg: 2000, cd: 1.5, mag: 5, maxMag: 5, reload: 2.0, pierce: 99, radius: 30, speed: 2200, life: 3.5, type: 'pulse', name: 'Pulse Rail Blaster' },
+                ]
+            },
+            machinegun: {
+                id: 'machinegun', name: 'Machine Gun', cost: 5000,
+                levels: [
+                    { dmg: 15, cd: 0.1, mag: 40, maxMag: 40, reload: 2.0, pierce: 0, speed: 900, life: 1.2, type: 'rapid' },
+                    { dmg: 18, cd: 0.1, mag: 50, maxMag: 50, reload: 1.9, pierce: 0, speed: 900, life: 1.2, type: 'rapid' },
+                    { dmg: 22, cd: 0.09, mag: 60, maxMag: 60, reload: 1.8, pierce: 0, speed: 950, life: 1.3, type: 'rapid' },
+                    { dmg: 26, cd: 0.09, mag: 70, maxMag: 70, reload: 1.7, pierce: 0, speed: 950, life: 1.3, type: 'rapid' },
+                    { dmg: 32, cd: 0.06, mag: 80, maxMag: 80, reload: 1.5, pierce: 0, speed: 1000, life: 1.4, type: 'minigun', name: 'Minigun' },
+                    { dmg: 38, cd: 0.06, mag: 90, maxMag: 90, reload: 1.4, pierce: 0, speed: 1000, life: 1.4, type: 'minigun' },
+                    { dmg: 45, cd: 0.05, mag: 100, maxMag: 100, reload: 1.3, pierce: 0, speed: 1050, life: 1.5, type: 'minigun' },
+                    { dmg: 55, cd: 0.05, mag: 120, maxMag: 120, reload: 1.2, pierce: 0, speed: 1050, life: 1.5, type: 'minigun' },
+                    { dmg: 65, cd: 0.04, mag: 130, maxMag: 130, reload: 1.1, pierce: 0, speed: 1100, life: 1.6, type: 'minigun' },
+                    { dmg: 90, cd: 0.03, mag: 150, maxMag: 150, reload: 1.0, pierce: 2, speed: 1200, life: 1.8, type: 'plasma', name: 'Plasma Machine Gun' },
+                ]
             }
         };
 
-        function createWeaponInstance(weaponId) {
-            const template = WEAPONS_DATA[weaponId];
+        const PASSIVES = {
+            power: { id: 'power', name: 'Power Boost', desc: 'Weapon Damage +15%', max: 5 },
+            speed: { id: 'speed', name: 'Swift Boots', desc: 'Move Speed +10%', max: 5 },
+            reload: { id: 'reload', name: 'Quick Reload', desc: 'Reload & Cooldown -15%', max: 5 },
+            magnet: { id: 'magnet', name: 'Item Magnet', desc: 'Pickup Radius +25%', max: 5 },
+            crit: { id: 'crit', name: 'Critical Strike', desc: '20% Chance for 2x Damage', max: 5 },
+            regen: { id: 'regen', name: 'Nano Regen', desc: 'Regenerate 1.5% Max HP/sec', max: 5 },
+            shockwave: { id: 'shockwave', name: 'Shockwave Pulse', desc: 'Periodic Knockback Pulse', max: 5 },
+        };
+
+        let gameState = 'MENU';
+        let lastTime = 0, gameTime = 0, wave = 1;
+        let goldEarned = 0, enemySpawnTimer = 0;
+        let camX = 0, camY = 0, camZoom = 1;
+
+        let player, weaponState;
+        let enemies = [], bullets = [], enemyBullets = [], gems = [], particles = [], floatTexts = [];
+        let exp = 0, expNeeded = 10, level = 1;
+
+        const keys = { w: false, a: false, s: false, d: false };
+        window.addEventListener('keydown', e => {
+            if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
+            if(e.key === 'Escape') {
+                if(gameState === 'PLAYING' || gameState === 'PAUSED') togglePause();
+            }
+        });
+        window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+        let joyActive = false, joyVector = {x: 0, y: 0};
+        const joyZone = document.getElementById('joystick-zone');
+        const joyKnob = document.getElementById('joystick-knob');
+        let joyCenter = {x: 0, y: 0};
+
+        joyZone.addEventListener('touchstart', e => {
+            joyActive = true;
+            const rect = joyZone.getBoundingClientRect();
+            joyCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+            handleJoyMove(e.touches[0]);
+        });
+        joyZone.addEventListener('touchmove', e => {
+            if(joyActive) handleJoyMove(e.touches[0]);
+            e.preventDefault();
+        });
+        joyZone.addEventListener('touchend', () => {
+            joyActive = false; joyVector = {x: 0, y: 0};
+            joyKnob.style.transform = `translate(0px, 0px)`;
+        });
+
+        function handleJoyMove(touch) {
+            const dx = touch.clientX - joyCenter.x;
+            const dy = touch.clientY - joyCenter.y;
+            const dist = Math.hypot(dx, dy);
+            const maxDist = 40;
+            const normalizedDist = Math.min(dist, maxDist);
+            const angle = Math.atan2(dy, dx);
+            
+            joyVector.x = Math.cos(angle) * (normalizedDist/maxDist);
+            joyVector.y = Math.sin(angle) * (normalizedDist/maxDist);
+            joyKnob.style.transform = `translate(${Math.cos(angle)*normalizedDist}px, ${Math.sin(angle)*normalizedDist}px)`;
+        }
+
+        function togglePause() {
+            if(gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                document.getElementById('pause-screen').classList.remove('hidden');
+            } else if(gameState === 'PAUSED') {
+                gameState = 'PLAYING';
+                document.getElementById('pause-screen').classList.add('hidden');
+                lastTime = performance.now();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function initGame() {
+            const baseHp = 100 + (saveData.upgrades.maxHp * 20);
+            const baseSpeed = 150 + (saveData.upgrades.moveSpeed * 10);
+            
+            player = {
+                x: 0, y: 0, radius: 15,
+                hp: baseHp, maxHp: baseHp, speed: baseSpeed,
+                weaponLevel: 1,
+                passives: { power: 0, speed: 0, reload: 0, magnet: 0, crit: 0, regen: 0, shockwave: 0 },
+                shockwaveTimer: 0
+            };
+
+            const wData = WEAPON_DATA[saveData.equipped].levels[0];
+            weaponState = {
+                id: saveData.equipped,
+                lastFired: 0,
+                mag: wData.mag,
+                isReloading: false,
+                reloadTimer: 0
+            };
+
+            enemies = []; bullets = []; enemyBullets = []; gems = []; particles = []; floatTexts = [];
+            gameTime = 0; wave = 1; goldEarned = 0; exp = 0; expNeeded = 10; level = 1;
+            gameState = 'PLAYING';
+            lastTime = performance.now();
+            
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('pause-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+            
+            updateHUD();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function getStatMultipliers() {
+            const p = player.passives;
             return {
-                ...template,
-                level: 1,
-                cooldownTimer: 0,
-                damage: template.baseDamage,
-                cooldown: template.baseCooldown,
-                maxAmmo: template.maxAmmo,
-                currentAmmo: template.maxAmmo,
-                reloadTimer: 0,
-                isReloading: false
+                dmg: 1 + (saveData.upgrades.attack * 0.1) + (p.power * 0.15),
+                speed: 1 + (p.speed * 0.1),
+                reloadCd: Math.max(0.2, 1 - (p.reload * 0.15)),
+                magnet: 1 + (p.magnet * 0.25),
+                critChance: p.crit * 0.2
             };
         }
 
-        function upgradeWeapon(w) {
-            w.level++;
-            const lv = w.level;
-            switch(w.id) {
-                case 'pistol':
-                    if (lv === 5) { w.name = "쌍권총"; w.color = "#fbbf24"; w.count = 2; w.maxAmmo = 12; w.cooldown = 320; }
-                    else if (lv === 10) { w.name = "아킴보"; w.color = "#f59e0b"; w.count = 2; w.maxAmmo = 10; w.cooldown = 140; w.pierce += 1; }
-                    else { w.damage *= 1.2; w.maxAmmo += 2; }
-                    break;
-                case 'machinegun':
-                    if (lv === 5) { w.name = "미니건"; w.color = "#ea580c"; w.cooldown = 45; w.maxAmmo = 80; w.spread = 0.4; }
-                    else if (lv === 10) { w.name = "플라즈마 머신건"; w.color = "#3b82f6"; w.damage *= 2.0; w.pierce += 1; w.maxAmmo = 150; w.projectileRadius = 5; }
-                    else { w.damage *= 1.15; w.maxAmmo += 20; }
-                    break;
-                case 'shotgun':
-                    if (lv === 5) { w.name = "전투 샷건"; w.color = "#dc2626"; w.count = 8; w.maxAmmo = 10; }
-                    else if (lv === 10) { w.name = "지옥불 산탄포"; w.color = "#ff0000"; w.count = 14; w.maxAmmo = 16; w.pierce += 2; w.damage *= 1.5; }
-                    else { if(lv % 2 === 0) w.count += 1; else w.damage *= 1.25; w.maxAmmo += 2; }
-                    break;
-                case 'sniper':
-                    if (lv === 5) { w.name = "레일건"; w.color = "#2dd4bf"; w.pierce += 5; w.damage *= 1.5; w.maxAmmo = 8; w.projectileRadius = 8; }
-                    else if (lv === 10) { w.name = "펄스 레일 블라스터"; w.color = "#8b5cf6"; w.pierce += 10; w.damage *= 2.5; w.maxAmmo = 12; w.cameraScale = 0.5; w.projectileRadius = 14; }
-                    else { w.damage *= 1.3; w.maxAmmo += 2; w.pierce += 1; }
-                    break;
-            }
-            w.currentAmmo = w.maxAmmo; // 업그레이드시 탄창 즉시 충전
-        }
+        function spawnEnemy(dt) {
+            enemySpawnTimer -= dt;
+            if(enemySpawnTimer <= 0) {
+                const spawnInterval = Math.max(0.1, 1.2 - (wave * 0.05));
+                enemySpawnTimer = spawnInterval;
+                
+                const angle = Math.random() * Math.PI * 2;
+                const dist = (Math.max(width, height) / 2) / camZoom + 100;
+                
+                const currentBossMilestone = Math.floor(gameTime / 300);
+                const prevBossMilestone = Math.floor((gameTime - dt) / 300);
+                const isBoss = (currentBossMilestone > prevBossMilestone);
+                
+                const randType = Math.random();
+                let type = 'normal';
+                let hpBase = 50, speedBase = 70, radiusBase = 14, color = '#ef4444', dmgMultiplier = 1;
+                const specialChanceBonus = Math.min(0.4, wave * 0.02);
 
-        // PASSIVES & SUB-ABILITIES
-        const PASSIVES_DATA = {
-            attack: { name: "근력 강화", desc: "모든 무기 피해량 15% 증가", icon: "⚔️", level: 0 },
-            speed: { name: "신속의 부츠", desc: "이동 속도 10% 증가", icon: "👟", level: 0 },
-            haste: { name: "고속 장전", desc: "재장전 시간 15% 단축 및 공속 상승", icon: "⚡", level: 0 },
-            magnet: { name: "자석", desc: "아이템 획득 반경 25% 증가", icon: "🧲", level: 0 },
-            crit: { name: "치명타 증폭", desc: "20% 확률로 2배의 치명타 피해", icon: "🎯", level: 0 },
-            regen: { name: "나노 재생", desc: "초당 체력 1.5% 자동 회복", icon: "🧬", level: 0 },
-            shockwave: { name: "충격파", desc: "일정 주기마다 주변 적을 강력하게 밀어냄", icon: "💥", level: 0, cooldown: 3.0, timer: 0 }
-        };
+                if (isBoss || (gameTime > 300 && enemies.filter(e => e.type === 'boss').length === 0 && Math.floor(gameTime)%300 < 2)) {
+                    type = 'boss'; hpBase = 12000; speedBase = 45; radiusBase = 60; color = '#a855f7'; dmgMultiplier = 2.5;
+                } else if (randType < 0.15 + specialChanceBonus) {
+                    type = 'sniper'; hpBase = 40; speedBase = 50; radiusBase = 13; color = '#38bdf8'; dmgMultiplier = 1.2;
+                } else if (randType < 0.30 + (specialChanceBonus * 1.5)) {
+                    type = 'bomber'; hpBase = 30; speedBase = 110; radiusBase = 11; color = '#f97316'; dmgMultiplier = 2.0;
+                } else if (randType < 0.45 + (specialChanceBonus * 1.5)) {
+                    type = 'cheetah'; hpBase = 50; speedBase = 180; radiusBase = 10; color = '#facc15'; dmgMultiplier = 1.1;
+                } else if (randType < 0.55 + specialChanceBonus) {
+                    type = 'elite'; hpBase = 250; speedBase = 85; radiusBase = 20; color = '#ec4899'; dmgMultiplier = 1.5;
+                }
 
-        let gameState = 'START';
-        let lastTime = 0, gameTimer = 0;
-        let waveNumber = 1, waveTimer = 0; // 웨이브당 2분 (120초) 무한 반복
-        const WAVE_DURATION = 120;
-        
-        let killCount = 0, sessionGold = 0;
-        let animationFrameId;
-        
-        let player = {
-            x: 0, y: 0, radius: 15,
-            baseSpeed: 210, speed: 210,
-            baseMaxHp: 100, maxHp: 100, hp: 100,
-            basePickupRange: 70, pickupRange: 70,
-            xp: 0, level: 1, maxXp: 100,
-            weapon: null,
-            passives: JSON.parse(JSON.stringify(PASSIVES_DATA)),
-            stats: { damageMult: 1.0, cooldownMult: 1.0, reloadMult: 1.0 }
-        };
-        
-        let camera = { x: 0, y: 0, scale: 1.0, targetScale: 1.0 };
-        let enemies = [], projectiles = [], particles = [], damageTexts = [], items = [];
-        let enemySpawnTimer = 0, enemySpawnRate = 900, enemyHpMultiplier = 1.0;
+                const waveHpMultiplier = Math.pow(1.15, wave - 1) * (1 + (wave - 1) * 0.1);
+                const finalHp = hpBase * waveHpMultiplier;
 
-        function calcPlayerStats() {
-            const shopDmg = saveData.upgrades.dmg * 0.1;
-            const shopHp = saveData.upgrades.hp * 20;
-            const shopSpd = saveData.upgrades.spd * 0.05;
-
-            player.stats.damageMult = 1.0 + shopDmg + (player.passives.attack.level * 0.15);
-            player.maxHp = player.baseMaxHp + shopHp;
-            player.speed = player.baseSpeed * (1.0 + shopSpd + (player.passives.speed.level * 0.1));
-            player.stats.reloadMult = Math.max(0.3, 1.0 - (player.passives.haste.level * 0.15));
-            player.stats.cooldownMult = player.stats.reloadMult;
-            player.pickupRange = player.basePickupRange * (1.0 + (player.passives.magnet.level * 0.25));
-            player.stats.critChance = player.passives.crit.level * 0.2; // 레벨당 20% 확률
-            player.stats.regenRate = player.passives.regen.level * 0.015; // 초당 체력 회복량
-            // 충격파 쿨타임은 레벨이 높을수록 쿨타임 감소 (레벨당 0.4초 감소, 최소 1.0초)
-            player.stats.shockwavePower = player.passives.shockwave.level > 0 ? 120 : 0;
-            player.passives.shockwave.cooldown = Math.max(1.0, 3.4 - (player.passives.shockwave.level * 0.4));
-        }
-
-        function spawnProjectile(p, angle, w) {
-            let finalDamage = w.damage * player.stats.damageMult;
-            let isCrit = false;
-            if (player.stats.critChance > 0 && Math.random() < player.stats.critChance) {
-                finalDamage *= 2.0;
-                isCrit = true;
-            }
-            projectiles.push({
-                x: p.x, y: p.y,
-                vx: Math.cos(angle) * w.speed * 60,
-                vy: Math.sin(angle) * w.speed * 60,
-                radius: w.projectileRadius || 4,
-                damage: finalDamage,
-                color: isCrit ? '#f43f5e' : w.color,
-                rangeSq: w.range ** 2,
-                startX: p.x, startY: p.y,
-                pierce: w.pierce,
-                isCrit: isCrit,
-                hitEnemies: new Set()
-            });
-        }
-
-        function spawnEnemy(isBoss = false, bossMultiplier = 1.0) {
-            const safeDist = Math.max(canvas.width, canvas.height) / camera.scale / 2 + 120;
-            const angle = Math.random() * Math.PI * 2;
-            const x = player.x + Math.cos(angle) * safeDist;
-            const y = player.y + Math.sin(angle) * safeDist;
-            
-            if (isBoss) {
-                const bossHp = 2500 * bossMultiplier * enemyHpMultiplier;
                 enemies.push({
-                    x: x, y: y,
-                    radius: 45,
-                    speed: 85,
-                    hp: bossHp, maxHp: bossHp,
-                    color: '#ef4444',
-                    damage: 35,
-                    isBoss: true,
-                    name: `웨이브 ${waveNumber} 보스`
+                    x: player.x + Math.cos(angle) * dist,
+                    y: player.y + Math.sin(angle) * dist,
+                    radius: radiusBase,
+                    hp: finalHp, maxHp: finalHp,
+                    speed: speedBase + (wave * 2),
+                    type: type, color: color,
+                    dmgMultiplier: dmgMultiplier,
+                    hitTimer: 0,
+                    shootTimer: 0,
+                    patternTimer: 0,
+                    isCharging: false,
+                    chargeVx: 0, chargeVy: 0
                 });
+            }
+        }
+
+        function fireWeapon(dt, time) {
+            const stats = getStatMultipliers();
+            const wData = WEAPON_DATA[weaponState.id].levels[player.weaponLevel - 1];
+            
+            if(weaponState.isReloading) {
+                weaponState.reloadTimer -= dt;
+                if(weaponState.reloadTimer <= 0) {
+                    weaponState.isReloading = false;
+                    weaponState.mag = wData.mag;
+                    document.getElementById('hud-reloading').classList.add('hidden');
+                    updateHUD();
+                }
                 return;
             }
 
-            const eliteChance = Math.min(0.45, (waveNumber * 0.05) + (gameTimer / 400));
-            const isElite = Math.random() < eliteChance;
-            
-            enemies.push({
-                x: x, y: y,
-                radius: isElite ? 22 : 12,
-                speed: isElite ? 70 : 110 + (Math.random() * 25),
-                hp: (isElite ? 180 : 35) * enemyHpMultiplier,
-                maxHp: (isElite ? 180 : 35) * enemyHpMultiplier,
-                color: isElite ? '#8b5cf6' : '#22c55e',
-                damage: isElite ? 18 : 8,
-                isElite: isElite,
-                isBoss: false
-            });
+            const cd = wData.cd * stats.reloadCd;
+            if(weaponState.mag > 0 && time - weaponState.lastFired >= cd) {
+                let targets = [...enemies].sort((a, b) => Math.hypot(a.x-player.x, a.y-player.y) - Math.hypot(b.x-player.x, b.y-player.y));
+                
+                // 사정거리가 대폭 늘어난 권총이나 샷건도 탐지 범위(800) 내에서 적을 조준할 수 있도록 반영
+                if(targets.length > 0 && Math.hypot(targets[0].x-player.x, targets[0].y-player.y) < 800 / camZoom) {
+                    let fired = false;
+                    const baseDmg = wData.dmg * stats.dmg;
+                    const isCrit = Math.random() < stats.critChance;
+                    const finalDmg = isCrit ? baseDmg * 2 : baseDmg;
+                    const bulletColor = isCrit ? '#fcd34d' : '#60a5fa';
+
+                    const bSpeed = wData.speed || 800;
+                    const bLife = wData.life || 1.5;
+
+                    if(wData.type === 'normal' || wData.type === 'dual' || wData.type === 'akimbo') {
+                        let tCount = wData.targets || 1;
+                        if(wData.type === 'akimbo') tCount = 3;
+                        
+                        for(let i=0; i<Math.min(tCount, targets.length); i++) {
+                            const angle = Math.atan2(targets[i].y - player.y, targets[i].x - player.x) + (wData.type === 'akimbo' ? (Math.random()-0.5)*0.3 : 0);
+                            bullets.push({
+                                x: player.x, y: player.y, vx: Math.cos(angle)*bSpeed, vy: Math.sin(angle)*bSpeed,
+                                dmg: finalDmg, pierce: wData.pierce, radius: 4, life: bLife, color: bulletColor, isCrit
+                            });
+                        }
+                        fired = true;
+                    } 
+                    else if (wData.type === 'spread' || wData.type === 'hellfire') {
+                        const targetAngle = Math.atan2(targets[0].y - player.y, targets[0].x - player.x);
+                        // 레벨업에 따라 넓어지는 샷건 퍼짐각(spread) 적용
+                        const spreadAngle = wData.spread;
+                        for(let i=0; i<wData.pellets; i++) {
+                            const angle = targetAngle - spreadAngle/2 + (spreadAngle / (wData.pellets-1)) * i;
+                            bullets.push({
+                                x: player.x, y: player.y, vx: Math.cos(angle)*bSpeed, vy: Math.sin(angle)*bSpeed,
+                                dmg: finalDmg, pierce: wData.pierce, radius: wData.type === 'hellfire'? 6 : 3, life: bLife, color: wData.type==='hellfire'? '#f97316' : bulletColor, isCrit
+                            });
+                        }
+                        fired = true;
+                    }
+                    else if (wData.type === 'pierce' || wData.type === 'railgun' || wData.type === 'pulse') {
+                        const angle = Math.atan2(targets[0].y - player.y, targets[0].x - player.x);
+                        bullets.push({
+                            x: player.x, y: player.y, vx: Math.cos(angle)*bSpeed, vy: Math.sin(angle)*bSpeed,
+                            dmg: finalDmg, pierce: wData.pierce, radius: wData.radius, life: bLife, color: wData.type==='pulse'? '#c084fc' : bulletColor, isCrit
+                        });
+                        fired = true;
+                    }
+                    else if (wData.type === 'rapid' || wData.type === 'minigun' || wData.type === 'plasma') {
+                        const angle = Math.atan2(targets[0].y - player.y, targets[0].x - player.x) + (Math.random()-0.5)*0.2;
+                        bullets.push({
+                            x: player.x, y: player.y, vx: Math.cos(angle)*bSpeed, vy: Math.sin(angle)*bSpeed,
+                            dmg: finalDmg, pierce: wData.pierce, radius: wData.type==='plasma'? 5: 3, life: bLife, color: wData.type==='plasma'? '#2dd4bf': bulletColor, isCrit
+                        });
+                        fired = true;
+                    }
+
+                    if(fired) {
+                        weaponState.lastFired = time;
+                        weaponState.mag--;
+                        if(weaponState.mag <= 0) {
+                            weaponState.isReloading = true;
+                            weaponState.reloadTimer = wData.reload * stats.reloadCd;
+                            document.getElementById('hud-reloading').classList.remove('hidden');
+                        }
+                        updateHUD();
+                    }
+                }
+            }
         }
 
-        function spawnItem(x, y, isElite, isBoss) {
-            let type = 'xp', value = 12, color = '#3b82f6', size = 4;
-            if (isBoss) {
-                type = 'gold'; value = 200; color = '#fbbf24'; size = 10;
-            } else if (Math.random() < 0.1) {
-                type = 'gold'; value = isElite ? 8 : 1; color = '#fbbf24'; size = 5;
-            } else if (isElite) {
-                value = 60; color = '#8b5cf6'; size = 6;
+        function update(dt) {
+            gameTime += dt;
+            const newWave = Math.floor(gameTime / 120) + 1;
+            if(newWave > wave) { 
+                wave = newWave; 
+                floatTexts.push({x: player.x, y: player.y - 60, text: `WAVE ${wave} REACHED! MONSTERS STRONGER!`, life: 2.0, color: '#f59e0b', size: 22});
+                updateHUD(); 
             }
-            items.push({ x, y, type, value, color, size, collected: false });
+
+            const stats = getStatMultipliers();
+
+            if(player.passives.regen > 0) {
+                player.hp = Math.min(player.maxHp, player.hp + (player.maxHp * 0.015 * player.passives.regen) * dt);
+            }
+            if(player.passives.shockwave > 0) {
+                player.shockwaveTimer -= dt;
+                if(player.shockwaveTimer <= 0) {
+                    player.shockwaveTimer = 3.0;
+                    particles.push({x: player.x, y: player.y, r: 10, maxR: 150, life: 0.5, maxLife: 0.5, type: 'shockwave'});
+                    enemies.forEach(e => {
+                        const d = Math.hypot(e.x - player.x, e.y - player.y);
+                        if(d < 150) {
+                            const angle = Math.atan2(e.y - player.y, e.x - player.x);
+                            e.x += Math.cos(angle) * (150 - d);
+                            e.y += Math.sin(angle) * (150 - d);
+                            e.hp -= 50 * player.passives.shockwave * stats.dmg;
+                        }
+                    });
+                }
+            }
+
+            let vx = 0, vy = 0;
+            if(keys.w) vy -= 1; if(keys.s) vy += 1;
+            if(keys.a) vx -= 1; if(keys.d) vx += 1;
+            if(joyActive) { vx = joyVector.x; vy = joyVector.y; }
+
+            const len = Math.hypot(vx, vy);
+            if(len > 0 && !joyActive) { vx /= len; vy /= len; }
+
+            player.x += vx * player.speed * stats.speed * dt;
+            player.y += vy * player.speed * stats.speed * dt;
+
+            camX = player.x; camY = player.y;
+
+            fireWeapon(dt, gameTime);
+            spawnEnemy(dt);
+
+            for(let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+                if(b.life <= 0) bullets.splice(i, 1);
+            }
+
+            for(let i = enemyBullets.length - 1; i >= 0; i--) {
+                const eb = enemyBullets[i];
+                eb.x += eb.vx * dt; eb.y += eb.vy * dt; eb.life -= dt;
+                if(eb.life <= 0) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+                if(Math.hypot(player.x - eb.x, player.y - eb.y) < player.radius + eb.radius) {
+                    player.hp -= eb.dmg * (1 + (wave - 1) * 0.08);
+                    enemyBullets.splice(i, 1);
+                    document.body.classList.remove('damage-flash');
+                    void document.body.offsetWidth;
+                    document.body.classList.add('damage-flash');
+                    updateHUD();
+                    if(player.hp <= 0) gameOver();
+                }
+            }
+
+            const pickupRadius = 60 * stats.magnet;
+            for(let i = gems.length - 1; i >= 0; i--) {
+                const g = gems[i];
+                const d = Math.hypot(g.x - player.x, g.y - player.y);
+                if(d < pickupRadius) {
+                    const angle = Math.atan2(player.y - g.y, player.x - g.x);
+                    g.x += Math.cos(angle) * 400 * dt;
+                    g.y += Math.sin(angle) * 400 * dt;
+                }
+                if(d < player.radius + 10) {
+                    exp += g.val;
+                    gems.splice(i, 1);
+                    checkLevelUp();
+                }
+            }
+
+            for(let i = particles.length - 1; i >= 0; i--) {
+                particles[i].life -= dt;
+                if(particles[i].life <= 0) particles.splice(i, 1);
+            }
+            for(let i = floatTexts.length - 1; i >= 0; i--) {
+                floatTexts[i].life -= dt;
+                floatTexts[i].y -= 20 * dt;
+                if(floatTexts[i].life <= 0) floatTexts.splice(i, 1);
+            }
+
+            for(let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                if(e.hitTimer > 0) e.hitTimer -= dt;
+
+                if (e.type === 'boss') {
+                    e.patternTimer += dt;
+                    if (e.isCharging) {
+                        e.x += e.chargeVx * dt;
+                        e.y += e.chargeVy * dt;
+                        if (e.patternTimer > 1.5) e.isCharging = false;
+                    } else {
+                        const angle = Math.atan2(player.y - e.y, player.x - e.x);
+                        e.x += Math.cos(angle) * e.speed * dt;
+                        e.y += Math.sin(angle) * e.speed * dt;
+
+                        if (e.patternTimer > 5.0) {
+                            e.patternTimer = 0;
+                            if (Math.random() < 0.5) {
+                                const count = 16;
+                                for (let c = 0; c < count; c++) {
+                                    const a = (Math.PI * 2 / count) * c;
+                                    enemyBullets.push({
+                                        x: e.x, y: e.y,
+                                        vx: Math.cos(a) * 280, vy: Math.sin(a) * 280,
+                                        radius: 6, dmg: 20, life: 3.5
+                                    });
+                                }
+                            } else {
+                                e.isCharging = true;
+                                const chargeAngle = Math.atan2(player.y - e.y, player.x - e.x);
+                                e.chargeVx = Math.cos(chargeAngle) * 500;
+                                e.chargeVy = Math.sin(chargeAngle) * 500;
+                            }
+                        }
+                    }
+                } else if (e.type === 'sniper') {
+                    const distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
+                    const angle = Math.atan2(player.y - e.y, player.x - e.x);
+                    if (distToPlayer > 320) {
+                        e.x += Math.cos(angle) * e.speed * dt;
+                        e.y += Math.sin(angle) * e.speed * dt;
+                    } else if (distToPlayer < 220) {
+                        e.x -= Math.cos(angle) * e.speed * dt;
+                        e.y -= Math.sin(angle) * e.speed * dt;
+                    }
+                    e.shootTimer += dt;
+                    if (e.shootTimer > 2.2) {
+                        e.shootTimer = 0;
+                        enemyBullets.push({
+                            x: e.x, y: e.y,
+                            vx: Math.cos(angle) * 400, vy: Math.sin(angle) * 400,
+                            radius: 4, dmg: 12, life: 3.0
+                        });
+                    }
+                } else {
+                    const angle = Math.atan2(player.y - e.y, player.x - e.x);
+                    e.x += Math.cos(angle) * e.speed * dt;
+                    e.y += Math.sin(angle) * e.speed * dt;
+                }
+
+                for(let j = bullets.length - 1; j >= 0; j--) {
+                    const b = bullets[j];
+                    if(Math.hypot(b.x - e.x, b.y - e.y) < e.radius + b.radius) {
+                        const defenseFactor = Math.max(0.4, 1 - ((wave - 1) * 0.025));
+                        const actualDmg = b.dmg * defenseFactor;
+
+                        e.hp -= actualDmg;
+                        e.hitTimer = 0.1;
+                        
+                        particles.push({x: b.x, y: b.y, r: 2, life: 0.2, maxLife: 0.2, type: 'spark', vx: -b.vx*0.2, vy: -b.vy*0.2});
+                        floatTexts.push({x: e.x + (Math.random()-0.5)*20, y: e.y - 20, text: Math.floor(actualDmg), life: 0.5, color: b.isCrit ? '#fcd34d' : 'white', size: b.isCrit? 20: 14});
+
+                        if(b.pierce > 0) { b.pierce--; } 
+                        else { bullets.splice(j, 1); }
+
+                        if(e.hp <= 0) {
+                            let gVal = (e.type === 'boss' ? 500 : (e.type === 'elite' ? 15 : 1)) * Math.min(3, 1 + (wave-1)*0.1);
+                            let expVal = (e.type === 'boss' ? 300 : (e.type === 'elite' ? 20 : 1));
+                            
+                            goldEarned += Math.floor(gVal);
+                            gems.push({x: e.x, y: e.y, val: expVal, type: e.type});
+                            
+                            if (e.type === 'bomber') {
+                                particles.push({x: e.x, y: e.y, r: 10, maxR: 90, life: 0.4, maxLife: 0.4, type: 'shockwave'});
+                                if (Math.hypot(player.x - e.x, player.y - e.y) < 90) {
+                                    player.hp -= 30 * (e.dmgMultiplier || 1) * (1 + (wave-1)*0.05);
+                                    updateHUD();
+                                    if(player.hp <= 0) gameOver();
+                                }
+                            }
+
+                            for(let k=0;k<5;k++) particles.push({x: e.x, y: e.y, r: Math.random()*4+2, life: 0.3, maxLife: 0.3, type: 'blood', vx: (Math.random()-0.5)*200, vy: (Math.random()-0.5)*200, color: e.color});
+                            
+                            enemies.splice(i, 1);
+                            updateHUD();
+                        }
+                        break;
+                    }
+                }
+
+                if(enemies[i]) {
+                    if(Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
+                        const baseContactDmg = (e.type === 'boss' ? 50 : (e.type === 'bomber' ? 40 : (e.type === 'elite' ? 15 : 5)));
+                        const dmg = baseContactDmg * (e.dmgMultiplier || 1) * (1 + (wave - 1) * 0.1) * dt;
+                        player.hp -= dmg;
+                        
+                        document.body.classList.remove('damage-flash');
+                        void document.body.offsetWidth;
+                        document.body.classList.add('damage-flash');
+                        updateHUD();
+
+                        if(e.type === 'bomber') {
+                            enemies.splice(i, 1);
+                        }
+
+                        if(player.hp <= 0) gameOver();
+                    }
+                }
+            }
+
+            if(player.hp / player.maxHp < 0.3) document.body.classList.add('low-hp-pulse');
+            else document.body.classList.remove('low-hp-pulse');
         }
 
         function checkLevelUp() {
-            if (player.xp >= player.maxXp) {
-                player.xp -= player.maxXp;
-                player.level++;
-                player.maxXp = Math.floor(100 * Math.pow(player.level, 1.25));
-                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.25);
+            if(exp >= expNeeded) {
+                exp -= expNeeded;
+                level++;
+                expNeeded = Math.floor(expNeeded * 1.2 + 10);
                 updateHUD();
-                triggerLevelUpScreen();
+                
+                gameState = 'LEVELUP';
+                keys.w=false; keys.a=false; keys.s=false; keys.d=false; joyActive=false;
+                showLevelUpScreen();
             } else {
                 updateHUD();
             }
         }
 
-        function triggerLevelUpScreen() {
-            gameState = 'LEVELUP';
-            document.getElementById('hud').classList.add('hidden');
-            document.getElementById('xp-container').classList.add('hidden');
-            document.getElementById('levelup-screen').classList.remove('hidden');
+        function showLevelUpScreen() {
+            const screen = document.getElementById('levelup-screen');
+            const container = document.getElementById('upgrade-options');
+            container.innerHTML = '';
             
-            let pool = [];
-            const w = player.weapon;
-            if (w && w.level < 10) pool.push({ type: 'upgrade_weapon', weapon: w });
+            let options = [];
             
-            Object.keys(player.passives).forEach(pKey => {
-                if (player.passives[pKey].level < 5) {
-                    pool.push({ type: 'passive', id: pKey, data: player.passives[pKey] });
-                }
-            });
-
-            if (pool.length === 0) {
-                pool.push({ type: 'heal', data: { name: '긴급 수리', desc: '체력을 50% 회복합니다.', icon: '💖' } });
-                pool.push({ type: 'gold', data: { name: '보급품 금괴', desc: '150 골드를 획득합니다.', icon: '💰' } });
+            if(player.weaponLevel < 10) {
+                const nextLevelData = WEAPON_DATA[weaponState.id].levels[player.weaponLevel];
+                let title = `Weapon Level Up (Lv.${player.weaponLevel + 1})`;
+                if(player.weaponLevel + 1 === 5 || player.weaponLevel + 1 === 10) title = `[EVOLVE] ${nextLevelData.name}`;
+                options.push({
+                    title: title, desc: 'Enhance damage & capability', icon: '<span class="text-red-500 border border-red-500/50 bg-red-500/10 px-3 py-1 rounded text-xl font-black tracking-widest">[WPN]</span>',
+                    action: () => { player.weaponLevel++; }
+                });
+            } else {
+                options.push({ title: 'Repair', desc: 'Restore 50% HP', icon: '<span class="text-green-500 border border-green-500/50 bg-green-500/10 px-3 py-1 rounded text-xl font-black tracking-widest">[HP]</span>', action: () => { player.hp = Math.min(player.maxHp, player.hp + player.maxHp*0.5); } });
             }
 
-            pool.sort(() => 0.5 - Math.random());
-            const choices = pool.slice(0, 3);
-            const container = document.getElementById('levelup-choices');
-            container.innerHTML = '';
-
-            choices.forEach(choice => {
-                const btn = document.createElement('button');
-                btn.className = "card-hover bg-zinc-900 border-2 border-gray-700 text-left p-6 rounded-2xl flex flex-col h-full";
-                let title = "", desc = "", color = "#a78bfa", icon = "⚡";
-
-                if (choice.type === 'upgrade_weapon') {
-                    let nextLv = choice.weapon.level + 1;
-                    title = `${choice.weapon.name} LV.${nextLv}`;
-                    if (nextLv === 5 || nextLv === 10) title = `✨ 무기 진화 가능 ✨`;
-                    desc = choice.weapon.getDescription(choice.weapon.level);
-                    color = choice.weapon.color;
-                    icon = "🔫";
-                } else if (choice.type === 'passive') {
-                    title = `${choice.data.icon} ${choice.data.name} LV.${choice.data.level + 1}`;
-                    desc = choice.data.desc;
-                } else {
-                    title = choice.data.name; desc = choice.data.desc; icon = choice.data.icon; color = "#4ade80";
+            const pKeys = Object.keys(PASSIVES);
+            for (let i = pKeys.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pKeys[i], pKeys[j]] = [pKeys[j], pKeys[i]]; }
+            
+            let added = 0;
+            for(let k of pKeys) {
+                if(added >= 2) break;
+                if(player.passives[k] < PASSIVES[k].max) {
+                    options.push({
+                        title: `${PASSIVES[k].name} (Lv.${player.passives[k]+1})`, desc: PASSIVES[k].desc, icon: '<span class="text-blue-400 border border-blue-400/50 bg-blue-400/10 px-3 py-1 rounded text-xl font-black tracking-widest">[SYS]</span>',
+                        action: () => { player.passives[k]++; }
+                    });
+                    added++;
                 }
+            }
+            
+            while(options.length < 3) {
+                 options.push({ title: 'Gold Cache', desc: '+50 Gold', icon: '<span class="text-yellow-400 border border-yellow-400/50 bg-yellow-400/10 px-3 py-1 rounded text-xl font-black tracking-widest">[GLD]</span>', action: () => { goldEarned += 50; } });
+            }
 
-                btn.style.borderColor = color;
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'bg-gray-900 border-2 border-gray-600 hover:border-blue-400 p-6 rounded-xl text-center transition-all transform hover:scale-105 flex-1 shadow-lg group';
                 btn.innerHTML = `
-                    <div class="text-3xl mb-2">${icon}</div>
-                    <div class="text-xl font-bold mb-2 text-white">${title}</div>
-                    <div class="text-gray-400 text-sm mt-auto">${desc}</div>
+                    <div class="mb-4 mt-2 group-hover:scale-110 transition-transform duration-200 inline-block">${opt.icon}</div>
+                    <h3 class="text-xl font-bold text-white mb-2">${opt.title}</h3>
+                    <p class="text-gray-400 text-sm">${opt.desc}</p>
                 `;
-                btn.onclick = () => applyUpgradeAndResume(choice);
+                btn.onclick = () => {
+                    opt.action();
+                    screen.classList.add('hidden');
+                    gameState = 'PLAYING';
+                    lastTime = performance.now();
+                    requestAnimationFrame(gameLoop);
+                    updateHUD();
+                };
                 container.appendChild(btn);
             });
+
+            screen.classList.remove('hidden');
         }
 
-        function applyUpgradeAndResume(choice) {
-            if (choice.type === 'upgrade_weapon') {
-                upgradeWeapon(choice.weapon);
-            } else if (choice.type === 'passive') {
-                player.passives[choice.id].level++;
-                calcPlayerStats();
-            } else if (choice.type === 'heal') {
-                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5);
-            } else if (choice.type === 'gold') {
-                sessionGold += 150;
-            }
-
-            document.getElementById('levelup-screen').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            document.getElementById('xp-container').classList.remove('hidden');
-            gameState = 'PLAYING';
-            lastTime = performance.now();
-        }
-
-        function update(dt) {
-            if (gameState !== 'PLAYING') return;
-            gameTimer += dt;
-            waveTimer += dt;
-
-            // 나노 재생 패시브 적용
-            if (player.stats.regenRate > 0 && player.hp < player.maxHp) {
-                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * player.stats.regenRate * dt);
-            }
-
-            // 충격파 쿨타임 및 발동 관리
-            let triggerShockwave = false;
-            if (player.passives.shockwave.level > 0) {
-                player.passives.shockwave.timer -= dt;
-                if (player.passives.shockwave.timer <= 0) {
-                    player.passives.shockwave.timer = player.passives.shockwave.cooldown;
-                    triggerShockwave = true;
-                    // 충격파 시각 이펙트용 파티클 생성
-                    for (let k = 0; k < 16; k++) {
-                        const angle = (k / 16) * Math.PI * 2;
-                        particles.push({
-                            x: player.x, y: player.y,
-                            vx: Math.cos(angle) * 180, vy: Math.sin(angle) * 180,
-                            life: 0.5, color: '#38bdf8', size: 3
-                        });
-                    }
-                }
-            }
-
-            // 웨이브 2분(120초) 무한 루프 및 보스 소환 관리
-            if (waveTimer >= WAVE_DURATION) {
-                waveTimer = 0;
-                waveNumber++;
-                
-                // 50웨이브마다 보스 등장 (50, 100, 150...)
-                if (waveNumber % 50 === 0) {
-                    const bossMultiplier = waveNumber / 50;
-                    const actualMultiplier = waveNumber === 100 ? 3.0 : bossMultiplier;
-                    spawnEnemy(true, actualMultiplier);
-                    damageTexts.push({ x: player.x, y: player.y - 40, text: `⚠️ WAVE ${waveNumber} INFINITE BOSS APPEARED!`, life: 4.0, color: '#ef4444' });
-                } else {
-                    damageTexts.push({ x: player.x, y: player.y - 40, text: `🌊 WAVE ${waveNumber} BEGINS!`, life: 3.0, color: '#facc15' });
-                }
-                
-                // 웨이브가 올라갈수록 적 체력 배수 증가
-                enemyHpMultiplier = 1.0 + (waveNumber - 1) * 0.25;
-            }
-
-            // 플레이어 이동
-            let dx = 0, dy = 0;
-            if (keys.w || keys.ArrowUp) dy -= 1;
-            if (keys.s || keys.ArrowDown) dy += 1;
-            if (keys.a || keys.ArrowLeft) dx -= 1;
-            if (keys.d || keys.ArrowRight) dx += 1;
-
-            if (pointer.active) {
-                const worldX = (pointer.x - canvas.width/2) / camera.scale + camera.x;
-                const worldY = (pointer.y - canvas.height/2) / camera.scale + camera.y;
-                const angle = Math.atan2(worldY - player.y, worldX - player.x);
-                if (distSq(player.x, player.y, worldX, worldY) > 400) {
-                     dx = Math.cos(angle); dy = Math.sin(angle);
-                }
-            }
-
-            if (dx !== 0 || dy !== 0) {
-                const len = Math.sqrt(dx*dx + dy*dy);
-                player.x += (dx / len) * player.speed * dt;
-                player.y += (dy / len) * player.speed * dt;
-            }
-
-            // 무기 사격 및 자동 장전 로직
-            const w = player.weapon;
-            if (w) {
-                if (w.isReloading) {
-                    w.reloadTimer -= dt * 1000;
-                    if (w.reloadTimer <= 0) {
-                        w.isReloading = false;
-                        w.currentAmmo = w.maxAmmo;
-                    }
-                } else {
-                    w.cooldownTimer -= dt * 1000;
-                    if (w.currentAmmo <= 0) {
-                        w.isReloading = true;
-                        w.reloadTimer = w.reloadTime * player.stats.reloadMult;
-                    } else if (w.cooldownTimer <= 0 && enemies.length > 0) {
-                        const rngSq = w.range ** 2;
-                        
-                        // 쌍권총 및 아킴보: 2중 타겟팅 양손 사격 (개별 타겟 또는 같은 적 허용)
-                        if (w.id === 'pistol' && w.level >= 5) {
-                            let sortedEnemies = enemies.filter(e => distSq(player.x, player.y, e.x, e.y) <= rngSq)
-                                .map(e => ({ enemy: e, dist: distSq(player.x, player.y, e.x, e.y) }))
-                                .sort((a, b) => a.dist - b.dist);
-
-                            if (sortedEnemies.length > 0) {
-                                for (let i = 0; i < w.count; i++) {
-                                    let target = sortedEnemies[i % sortedEnemies.length].enemy;
-                                    const angle = Math.atan2(target.y - player.y, target.x - player.x);
-                                    spawnProjectile(player, angle, w);
-                                }
-                                w.currentAmmo--;
-                                w.cooldownTimer = w.cooldown * player.stats.cooldownMult;
-                                if (w.currentAmmo <= 0) {
-                                    w.isReloading = true;
-                                    w.reloadTimer = w.reloadTime * player.stats.reloadMult;
-                                }
-                            }
-                        } else {
-                            let nearest = null, minDist = Infinity;
-                            for (let i = 0; i < enemies.length; i++) {
-                                const d = distSq(player.x, player.y, enemies[i].x, enemies[i].y);
-                                if (d < minDist) { minDist = d; nearest = enemies[i]; }
-                            }
-                            if (nearest && minDist <= rngSq) {
-                                const angle = Math.atan2(nearest.y - player.y, nearest.x - player.x);
-                                w.fire(player, angle, enemies);
-                                w.currentAmmo--;
-                                w.cooldownTimer = w.cooldown * player.stats.cooldownMult;
-                                if (w.currentAmmo <= 0) {
-                                    w.isReloading = true;
-                                    w.reloadTimer = w.reloadTime * player.stats.reloadMult;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 적 스폰 로직
-            enemySpawnTimer += dt * 1000;
-            if (enemySpawnTimer >= enemySpawnRate) {
-                enemySpawnTimer = 0;
-                spawnEnemy();
-                if (enemySpawnRate > 300) enemySpawnRate -= 15;
-            }
-
-            // 적 이동 & 충돌 + 충격파 넉백 효과 적용
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                const angle = Math.atan2(player.y - e.y, player.x - e.x);
-                
-                let currentSpeed = e.speed;
-                if (triggerShockwave) {
-                    const dSq = distSq(player.x, player.y, e.x, e.y);
-                    const pushRadiusSq = 180 ** 2;
-                    if (dSq < pushRadiusSq) {
-                        e.x -= Math.cos(angle) * 150;
-                        e.y -= Math.sin(angle) * 150;
-                    }
-                }
-
-                e.x += Math.cos(angle) * currentSpeed * dt;
-                e.y += Math.sin(angle) * currentSpeed * dt;
-
-                if (distSq(player.x, player.y, e.x, e.y) < (player.radius + e.radius)**2) {
-                    player.hp -= (e.isBoss ? 45 : e.damage) * dt;
-                    if (player.hp <= 0) gameOver();
-                    updateHUD();
-                }
-            }
-
-            // 투사체 처리
-            for (let i = projectiles.length - 1; i >= 0; i--) {
-                const p = projectiles[i];
-                p.x += p.vx * dt; p.y += p.vy * dt;
-
-                if (distSq(p.startX, p.startY, p.x, p.y) > p.rangeSq) {
-                    projectiles.splice(i, 1);
-                    continue;
-                }
-
-                let projDead = false;
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    const e = enemies[j];
-                    if (p.hitEnemies.has(e)) continue;
-
-                    if (distSq(p.x, p.y, e.x, e.y) < (p.radius + e.radius)**2) {
-                        e.hp -= p.damage;
-                        p.hitEnemies.add(e);
-                        damageTexts.push({ x: e.x, y: e.y - 12, text: Math.floor(p.damage), life: 0.7, color: p.color });
-
-                        if (e.hp <= 0) {
-                            spawnItem(e.x, e.y, e.isElite, e.isBoss);
-                            for (let k = 0; k < (e.isBoss ? 20 : 5); k++) {
-                                particles.push({
-                                    x: e.x, y: e.y, vx: (Math.random()-0.5)*350, vy: (Math.random()-0.5)*350,
-                                    life: 0.8, color: e.color, size: Math.random()*5 + 2
-                                });
-                            }
-                            enemies.splice(j, 1);
-                            killCount++;
-                        }
-                        p.pierce--;
-                        if (p.pierce <= 0) { projDead = true; break; }
-                    }
-                }
-                if (projDead) projectiles.splice(i, 1);
-            }
-
-            // 아이템 수집
-            const pickupSq = player.pickupRange ** 2;
-            for (let i = items.length - 1; i >= 0; i--) {
-                const item = items[i];
-                const dSq = distSq(player.x, player.y, item.x, item.y);
-                if (item.collected || dSq < pickupSq) {
-                    item.collected = true;
-                    const angle = Math.atan2(player.y - item.y, player.x - item.x);
-                    item.x += Math.cos(angle) * 450 * dt;
-                    item.y += Math.sin(angle) * 450 * dt;
-
-                    if (dSq < (player.radius + item.size)**2) {
-                        if (item.type === 'xp') { player.xp += item.value; checkLevelUp(); }
-                        else if (item.type === 'gold') { sessionGold += item.value; }
-                        items.splice(i, 1);
-                    }
-                }
-            }
-
-            // 파티클 및 텍스트 정리
-            for (let i = particles.length - 1; i >= 0; i--) {
-                particles[i].x += particles[i].vx * dt; particles[i].y += particles[i].vy * dt;
-                particles[i].life -= dt * 2;
-                if (particles[i].life <= 0) particles.splice(i, 1);
-            }
-            for (let i = damageTexts.length - 1; i >= 0; i--) {
-                damageTexts[i].y -= 25 * dt; damageTexts[i].life -= dt;
-                if (damageTexts[i].life <= 0) damageTexts.splice(i, 1);
-            }
-
-            camera.x = lerp(camera.x, player.x, 0.1);
-            camera.y = lerp(camera.y, player.y, 0.1);
-            camera.scale = lerp(camera.scale, player.weapon ? player.weapon.cameraScale : 1.0, 0.05);
-
-            if (Math.floor(gameTimer) !== Math.floor(gameTimer - dt)) updateHUD();
+        function drawGrid(ctx, ox, oy) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 2;
+            const size = 100;
+            const startX = Math.floor(ox / size) * size;
+            const startY = Math.floor(oy / size) * size;
+            
+            ctx.beginPath();
+            for(let x = startX; x < ox + width/camZoom; x += size) { ctx.moveTo(x, oy); ctx.lineTo(x, oy + height/camZoom); }
+            for(let y = startY; y < oy + height/camZoom; y += size) { ctx.moveTo(ox, y); ctx.lineTo(ox + width/camZoom, y); }
+            ctx.stroke();
         }
 
         function draw() {
-            ctx.fillStyle = '#111827';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            if (gameState !== 'PLAYING') return;
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
 
             ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(camera.scale, camera.scale);
-            ctx.translate(-camera.x, -camera.y);
+            ctx.translate(width/2, height/2);
+            ctx.scale(camZoom, camZoom);
+            ctx.translate(-camX, -camY);
 
-            // 격자 배경
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-            ctx.lineWidth = 2;
-            const size = 100;
-            const sx = Math.floor((camera.x - canvas.width/2/camera.scale) / size) * size;
-            const ex = Math.ceil((camera.x + canvas.width/2/camera.scale) / size) * size;
-            const sy = Math.floor((camera.y - canvas.height/2/camera.scale) / size) * size;
-            const ey = Math.ceil((camera.y + canvas.height/2/camera.scale) / size) * size;
-            ctx.beginPath();
-            for (let x = sx; x <= ex; x += size) { ctx.moveTo(x, sy); ctx.lineTo(x, ey); }
-            for (let y = sy; y <= ey; y += size) { ctx.moveTo(sx, y); ctx.lineTo(ex, y); }
-            ctx.stroke();
+            const vLeft = camX - (width/2)/camZoom - 50;
+            const vRight = camX + (width/2)/camZoom + 50;
+            const vTop = camY - (height/2)/camZoom - 50;
+            const vBottom = camY + (height/2)/camZoom + 50;
 
-            // 아이템
-            for (const item of items) {
-                ctx.fillStyle = item.color;
-                ctx.beginPath();
-                if (item.type === 'gold') ctx.rect(item.x - item.size, item.y - item.size, item.size*2, item.size*2);
-                else {
-                    ctx.moveTo(item.x, item.y - item.size); ctx.lineTo(item.x + item.size, item.y);
-                    ctx.lineTo(item.x, item.y + item.size); ctx.lineTo(item.x - item.size, item.y);
+            drawGrid(ctx, vLeft, vTop);
+
+            gems.forEach(g => {
+                if(g.x > vLeft && g.x < vRight && g.y > vTop && g.y < vBottom) {
+                    ctx.fillStyle = g.type === 'boss' ? '#ef4444' : (g.type === 'elite' ? '#3b82f6' : '#22c55e');
+                    ctx.beginPath(); ctx.arc(g.x, g.y, g.type==='boss'? 8: (g.type==='elite'?5:3), 0, Math.PI*2); ctx.fill();
                 }
-                ctx.fill();
-            }
+            });
 
-            // 적
-            for (const e of enemies) {
-                ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-                ctx.fillStyle = e.color; ctx.fill();
-                if (e.isBoss) {
-                    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 4; ctx.stroke();
+            enemies.forEach(e => {
+                if(e.x > vLeft && e.x < vRight && e.y > vTop && e.y < vBottom) {
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    
+                    if (e.hitTimer > 0) {
+                        ctx.fillStyle = 'white';
+                    } else {
+                        ctx.fillStyle = e.color;
+                    }
+
+                    if (e.type === 'boss') {
+                        ctx.rotate(gameTime);
+                        ctx.beginPath();
+                        for (let c = 0; c < 8; c++) {
+                            const angle = (Math.PI * 2 / 8) * c;
+                            const rx = Math.cos(angle) * e.radius;
+                            const ry = Math.sin(angle) * e.radius;
+                            if (c === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.strokeStyle = '#f87171';
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+                    } else if (e.type === 'sniper') {
+                        ctx.rotate(Math.atan2(player.y - e.y, player.x - e.x));
+                        ctx.beginPath();
+                        ctx.moveTo(e.radius * 1.4, 0);
+                        ctx.lineTo(-e.radius, -e.radius * 0.8);
+                        ctx.lineTo(-e.radius * 0.5, 0);
+                        ctx.lineTo(-e.radius, e.radius * 0.8);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.strokeStyle = '#bae6fd';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    } else if (e.type === 'bomber') {
+                        const pulse = Math.sin(gameTime * 15) * 3;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, e.radius + pulse, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#fef08a';
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                    } else if (e.type === 'cheetah') {
+                        ctx.rotate(Math.atan2(player.y - e.y, player.x - e.x));
+                        ctx.beginPath();
+                        ctx.moveTo(e.radius * 1.5, 0);
+                        ctx.lineTo(-e.radius, -e.radius);
+                        ctx.lineTo(-e.radius * 0.5, 0);
+                        ctx.lineTo(-e.radius, e.radius);
+                        ctx.closePath();
+                        ctx.fill();
+                    } else if (e.type === 'elite') {
+                        ctx.fillRect(-e.radius, -e.radius*0.5, e.radius*2, e.radius);
+                        ctx.fillRect(-e.radius*0.5, -e.radius, e.radius, e.radius*2);
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(-e.radius, -e.radius*0.5, e.radius*2, e.radius);
+                    } else {
+                        ctx.beginPath(); ctx.arc(0, 0, e.radius, 0, Math.PI*2); ctx.fill();
+                    }
+                    
+                    ctx.restore();
+
+                    if(e.hp < e.maxHp) {
+                        ctx.fillStyle = 'black'; ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, e.radius*2, 4);
+                        ctx.fillStyle = e.type === 'boss' ? '#c084fc' : 'red'; 
+                        ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, (e.radius*2)*(Math.max(0,e.hp)/e.maxHp), 4);
+                    }
                 }
-                if (e.hp < e.maxHp) {
-                    ctx.fillStyle = 'rgba(255,0,0,0.5)'; ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, e.radius*2, 5);
-                    ctx.fillStyle = '#22c55e'; ctx.fillRect(e.x - e.radius, e.y - e.radius - 12, (e.radius*2)*(e.hp/e.maxHp), 5);
+            });
+
+            ctx.fillStyle = '#10b981';
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
+
+            bullets.forEach(b => {
+                if(b.x > vLeft && b.x < vRight && b.y > vTop && b.y < vBottom) {
+                    ctx.fillStyle = b.color;
+                    ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2); ctx.fill();
                 }
-            }
+            });
 
-            // 투사체
-            for (const p of projectiles) {
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 8;
-                ctx.fill(); ctx.shadowBlur = 0;
-            }
+            enemyBullets.forEach(eb => {
+                if(eb.x > vLeft && eb.x < vRight && eb.y > vTop && eb.y < vBottom) {
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI*2); ctx.fill();
+                }
+            });
 
-            // 플레이어
-            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#3b82f6'; ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 15;
-            ctx.fill(); ctx.shadowBlur = 0;
+            particles.forEach(p => {
+                if(p.type === 'shockwave') {
+                    ctx.strokeStyle = `rgba(59, 130, 246, ${p.life/p.maxLife})`;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.maxR - p.r) * (1 - p.life/p.maxLife), 0, Math.PI*2); ctx.stroke();
+                } else {
+                    ctx.fillStyle = p.color || (p.type === 'spark' ? 'yellow' : 'white');
+                    ctx.globalAlpha = p.life / p.maxLife;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                    if(p.vx) p.x += p.vx * 0.016; if(p.vy) p.y += p.vy * 0.016;
+                }
+            });
 
-            // 파티클 & 데미지
-            for (const p of particles) {
-                ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
-            }
-            ctx.globalAlpha = 1.0;
-            ctx.font = 'bold 15px Inter, sans-serif'; ctx.textAlign = 'center';
-            for (const t of damageTexts) {
-                ctx.globalAlpha = t.life; ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
-            }
+            ctx.font = 'bold 16px Orbitron';
+            ctx.textAlign = 'center';
+            floatTexts.forEach(t => {
+                ctx.fillStyle = t.color;
+                ctx.globalAlpha = Math.max(0, t.life / 0.5);
+                ctx.font = `bold ${t.size}px sans-serif`;
+                ctx.fillText(t.text, t.x, t.y);
+            });
             ctx.globalAlpha = 1.0;
 
             ctx.restore();
         }
 
-        function formatTime(s) {
-            const m = Math.floor(s / 60).toString().padStart(2, '0');
-            const sec = Math.floor(s % 60).toString().padStart(2, '0');
-            return `${m}:${sec}`;
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') return;
+
+            let dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            if (dt > 0.1) dt = 0.1;
+
+            update(dt);
+            draw();
+
+            if (gameState === 'PLAYING') requestAnimationFrame(gameLoop);
         }
 
         function updateHUD() {
-            const wTimerSec = Math.floor(waveTimer);
-            document.getElementById('wave-display').innerText = `WAVE ${waveNumber} (${formatTime(wTimerSec)} / 02:00)`;
-            document.getElementById('kill-display').innerText = killCount;
-            document.getElementById('ingame-gold-display').innerText = sessionGold;
+            document.getElementById('hud-wave').innerText = `WAVE: ${wave}`;
+            document.getElementById('hud-time').innerText = `${Math.floor(gameTime/60).toString().padStart(2,'0')}:${Math.floor(gameTime%60).toString().padStart(2,'0')}`;
+            document.getElementById('gold-val').innerText = goldEarned;
             
-            const w = player.weapon;
-            if (w) {
-                const ammoDisplay = document.getElementById('ammo-display');
-                if (w.isReloading) {
-                    ammoDisplay.innerText = `RELOADING...`;
-                    ammoDisplay.className = "text-xl font-black text-red-400 animate-pulse";
-                } else {
-                    ammoDisplay.innerText = `${w.currentAmmo} / ${w.maxAmmo}`;
-                    ammoDisplay.className = "text-xl font-black text-cyan-300";
-                }
-            }
-
-            const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
-            document.getElementById('hp-bar').style.width = `${hpPct}%`;
-            document.getElementById('hp-text').innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
+            const wData = WEAPON_DATA[weaponState.id].levels[player.weaponLevel - 1];
+            let wName = WEAPON_DATA[weaponState.id].name;
+            if(wData.name) wName = wData.name;
+            document.getElementById('hud-weapon').innerText = `${wName} (Lv.${player.weaponLevel})`;
             
-            document.getElementById('level-display').innerText = `LV. ${player.level}`;
-            document.getElementById('xp-text').innerText = `${player.xp} / ${player.maxXp}`;
-            document.getElementById('xp-bar').style.width = `${(player.xp / player.maxXp) * 100}%`;
-        }
+            document.getElementById('hud-ammo-current').innerText = weaponState.mag;
+            document.getElementById('hud-ammo-max').innerText = wData.mag;
 
-        function startGame(weaponKey) {
-            document.getElementById('start-screen').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            document.getElementById('xp-container').classList.remove('hidden');
-            
-            player.x = 0; player.y = 0; player.level = 1; player.xp = 0; player.maxXp = 100;
-            player.passives = JSON.parse(JSON.stringify(PASSIVES_DATA));
-            calcPlayerStats();
-            player.hp = player.maxHp;
-            
-            player.weapon = createWeaponInstance(weaponKey);
-            camera.x = 0; camera.y = 0; camera.scale = 1.0;
+            document.getElementById('hud-level').innerText = level;
+            document.getElementById('hud-exp-text').innerText = `${exp} / ${expNeeded}`;
+            document.getElementById('hud-exp-bar').style.width = `${(exp/expNeeded)*100}%`;
 
-            enemies = []; projectiles = []; particles = []; damageTexts = []; items = [];
-            gameTimer = 0; waveTimer = 0; waveNumber = 1; killCount = 0; sessionGold = 0;
-            enemySpawnTimer = 0; enemySpawnRate = 900; enemyHpMultiplier = 1.0;
-
-            gameState = 'PLAYING';
-            lastTime = performance.now();
-            updateHUD();
-            animationFrameId = requestAnimationFrame(gameLoop);
+            const hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('hud-hp-bar').style.width = `${hpPercent}%`;
+            document.getElementById('hud-hp-text').innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
         }
 
         function gameOver() {
             gameState = 'GAMEOVER';
-            cancelAnimationFrame(animationFrameId);
-            document.getElementById('hud').classList.add('hidden');
-            document.getElementById('xp-container').classList.add('hidden');
+            saveData.gold += goldEarned;
+            saveGame();
+            
+            document.getElementById('go-wave').innerText = wave;
+            document.getElementById('go-gold').innerText = goldEarned;
             document.getElementById('gameover-screen').classList.remove('hidden');
-            
-            document.getElementById('final-wave').innerText = `WAVE ${waveNumber}`;
-            document.getElementById('final-level').innerText = `LV.${player.level}`;
-            document.getElementById('final-kills').innerText = killCount;
-            
-            const totalGold = sessionGold + Math.floor(killCount / 8) + (waveNumber * 25);
-            document.getElementById('final-gold').innerText = totalGold;
-            saveData.gold += totalGold;
-            saveGameData();
+            document.body.classList.remove('low-hp-pulse', 'damage-flash');
         }
 
-        function resetGame() {
+        function returnToMenu() {
             document.getElementById('gameover-screen').classList.add('hidden');
-            document.getElementById('start-screen').classList.remove('hidden');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            updateShopUI();
+            document.getElementById('pause-screen').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            initMenu();
         }
 
-        function gameLoop(timestamp) {
-            if (gameState === 'PLAYING') {
-                const dt = (timestamp - lastTime) / 1000;
-                lastTime = timestamp;
-                if (dt < 0.1) { update(dt); draw(); }
-            } else if (gameState === 'LEVELUP') {
-                draw();
+        function initMenu() {
+            document.getElementById('menu-gold').innerText = saveData.gold;
+            
+            ['attack', 'maxHp', 'moveSpeed'].forEach(stat => {
+                document.getElementById(`upg-${stat}-lv`).innerText = saveData.upgrades[stat];
+                document.getElementById(`upg-${stat}-cost`).innerText = `${(saveData.upgrades[stat] + 1) * 100}G`;
+            });
+
+            const wList = document.getElementById('weapon-list');
+            wList.innerHTML = '';
+            Object.keys(WEAPON_DATA).forEach(key => {
+                const w = WEAPON_DATA[key];
+                const isUnlocked = saveData.weapons[key];
+                const isEquipped = saveData.equipped === key;
+                
+                const div = document.createElement('div');
+                div.className = `p-3 rounded border flex justify-between items-center transition-colors ${isUnlocked ? (isEquipped ? 'bg-blue-900 border-blue-400' : 'bg-gray-800 border-gray-600 hover:bg-gray-700 cursor-pointer') : 'bg-gray-900 border-red-900 opacity-80'}`;
+                
+                if(isUnlocked && !isEquipped) div.onclick = () => { saveData.equipped = key; saveGame(); initMenu(); };
+                
+                let btnHTML = '';
+                if(isEquipped) btnHTML = `<span class="text-blue-300 font-bold text-sm">EQUIPPED</span>`;
+                else if(isUnlocked) btnHTML = `<span class="text-gray-400 text-sm">EQUIP</span>`;
+                else btnHTML = `<button onclick="unlockWeapon('${key}')" class="bg-red-900 hover:bg-red-800 text-xs px-2 py-1 rounded text-white shadow">UNLOCK (${w.cost}G)</button>`;
+
+                div.innerHTML = `
+                    <div>
+                        <p class="font-bold text-white">${w.name}</p>
+                        ${!isUnlocked ? `<p class="text-xs text-red-400">Locked</p>` : ''}
+                    </div>
+                    ${btnHTML}
+                `;
+                wList.appendChild(div);
+            });
+        }
+
+        function buyUpgrade(stat) {
+            const cost = (saveData.upgrades[stat] + 1) * 100;
+            if(saveData.gold >= cost && saveData.upgrades[stat] < 10) {
+                saveData.gold -= cost;
+                saveData.upgrades[stat]++;
+                saveGame();
+                initMenu();
             }
-            animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        loadSave();
-        ctx.fillStyle = '#111827';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function unlockWeapon(key) {
+            const cost = WEAPON_DATA[key].cost;
+            if(saveData.gold >= cost && !saveData.weapons[key]) {
+                saveData.gold -= cost;
+                saveData.weapons[key] = true;
+                saveGame();
+                initMenu();
+            }
+        }
+
+        function startGame() { initMenu(); initGame(); }
+
+        initMenu();
     </script>
 </body>
 </html>
